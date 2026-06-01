@@ -7,5 +7,16 @@ var chatClient = new OllamaChatClient(
 AIAgent agent = chatClient.AsAIAgent(
         instructions: "You are a friendly assistant. Keep your answers brief.");
 
-Console.WriteLine(await agent.RunAsync("What is the largest city in France?"));
+Console.WriteLine("Ask agent");
+
+string? promt = Console.ReadLine();
+
+if (string.IsNullOrEmpty(promt))
+{
+    Console.WriteLine("Promt is empty");
+    return;
+}
+
+Console.WriteLine(await agent.RunAsync(promt));
+
 
