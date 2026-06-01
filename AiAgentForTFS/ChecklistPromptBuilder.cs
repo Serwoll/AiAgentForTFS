@@ -152,7 +152,7 @@ public static class ChecklistPromptBuilder
         return prompt.ToString();
     }
 
-    public static string NormalizeMarkdown(WorkItemContext workItem, string markdown)
+    public static string NormalizeMarkdown(WorkItemContext workItem, string markdown, TimeSpan responseTime)
     {
         var result = markdown.Trim();
 
@@ -161,10 +161,10 @@ public static class ChecklistPromptBuilder
             result = $"# QA Checklist for US {workItem.Id}: {workItem.Title}{Environment.NewLine}{Environment.NewLine}{result}";
         }
 
-        return result + Environment.NewLine + BuildContextAudit(workItem);
+        return result + Environment.NewLine + BuildContextAudit(workItem, responseTime);
     }
 
-    private static string BuildContextAudit(WorkItemContext workItem)
+    private static string BuildContextAudit(WorkItemContext workItem, TimeSpan responseTime)
     {
         var audit = new StringBuilder();
         var codeFields = workItem.TextFields.Where(field => field.LooksLikeCodeContext).ToList();
@@ -176,6 +176,8 @@ public static class ChecklistPromptBuilder
         audit.AppendLine("---");
         audit.AppendLine();
         audit.AppendLine("## Context used by agent");
+        audit.AppendLine();
+        audit.AppendLine($"- LLM response time: {FormatElapsed(responseTime)}");
         audit.AppendLine();
         audit.AppendLine("### Code/implementation context sources");
 
@@ -212,24 +214,6 @@ public static class ChecklistPromptBuilder
                 {
                     audit.AppendLine("  - Changed file list was truncated.");
                 }
-
-                if (source.CommitMessages.Count > 0)
-                {
-                    audit.AppendLine("  - Commits:");
-                    foreach (var commitMessage in source.CommitMessages.Take(20))
-                    {
-                        audit.AppendLine($"    - {commitMessage}");
-                    }
-                }
-
-                if (source.ChangedFiles.Count > 0)
-                {
-                    audit.AppendLine("  - Changed files:");
-                    foreach (var changedFile in source.ChangedFiles.Take(100))
-                    {
-                        audit.AppendLine($"    - `{changedFile}`");
-                    }
-                }
             }
         }
 
@@ -265,5 +249,12 @@ public static class ChecklistPromptBuilder
     private static string EmptyIfMissing(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? "Not provided." : value;
+    }
+
+    private static string FormatElapsed(TimeSpan elapsed)
+    {
+        return elapsed.TotalSeconds < 60
+            ? $"{elapsed.TotalSeconds:F1}s"
+            : $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s";
     }
 }

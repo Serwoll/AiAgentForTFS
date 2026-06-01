@@ -1,6 +1,7 @@
 using AiAgentForTFS;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using System.Diagnostics;
 
 return await RunAsync(args);
 
@@ -107,8 +108,11 @@ static async Task<int> GenerateAndSaveAsync(WorkItemContext workItem, AppConfig 
     var prompt = ChecklistPromptBuilder.Build(workItem);
 
     Console.WriteLine("Generating QA checklist...");
+    var responseTimer = Stopwatch.StartNew();
     var response = await agent.RunAsync(prompt);
-    var markdown = ChecklistPromptBuilder.NormalizeMarkdown(workItem, response.ToString());
+    responseTimer.Stop();
+
+    var markdown = ChecklistPromptBuilder.NormalizeMarkdown(workItem, response.ToString(), responseTimer.Elapsed);
 
     Directory.CreateDirectory("output");
     var fileName = workItem.Id > 0
@@ -119,9 +123,17 @@ static async Task<int> GenerateAndSaveAsync(WorkItemContext workItem, AppConfig 
 
     Console.WriteLine();
     Console.WriteLine(markdown);
+    Console.WriteLine($"Response time: {FormatElapsed(responseTimer.Elapsed)}");
     Console.WriteLine($"Saved to: {Path.GetFullPath(outputPath)}");
 
     return 0;
+}
+
+static string FormatElapsed(TimeSpan elapsed)
+{
+    return elapsed.TotalSeconds < 60
+        ? $"{elapsed.TotalSeconds:F1}s"
+        : $"{(int)elapsed.TotalMinutes}m {elapsed.Seconds}s";
 }
 
 static WorkItemContext CreateManualWorkItem(ManualUserStoryInput input)
