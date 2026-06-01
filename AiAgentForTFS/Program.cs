@@ -7,16 +7,19 @@ var chatClient = new OllamaChatClient(
 AIAgent agent = chatClient.AsAIAgent(
         instructions: "You are a friendly assistant. Keep your answers brief.");
 
-Console.WriteLine("Ask agent");
-
-string? promt = Console.ReadLine();
-
-if (string.IsNullOrEmpty(promt))
+while (true)
 {
-    Console.WriteLine("Promt is empty");
-    return;
-}
+        Console.WriteLine("Ask agent");
+        string? promt = Console.ReadLine();
 
-Console.WriteLine(await agent.RunAsync(promt));
+        if (string.IsNullOrWhiteSpace(promt))
+        {
+                Console.WriteLine("Promt is empty");
+                return;
+        }
+        if (promt.Equals("exit", StringComparison.OrdinalIgnoreCase))
+                break;
+        Console.WriteLine(await agent.RunAsync(promt));
+}
 
 
