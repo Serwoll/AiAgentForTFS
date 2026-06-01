@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Agents.AI.Foundry" Version="1.8.0-preview.260528.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.Ollama" Version="9.7.0-preview.1.25356.2" />
   </ItemGroup>
 
 </Project>
