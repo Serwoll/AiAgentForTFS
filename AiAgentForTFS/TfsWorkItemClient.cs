@@ -35,6 +35,7 @@ public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config)
             CleanHtml(GetField(fields, "System.Description")),
             CleanHtml(GetField(fields, "Microsoft.VSTS.Common.AcceptanceCriteria")),
             GetField(fields, "System.Tags"),
+            ExtractTextFields(fields),
             (workItem.Relations ?? []).Select(ToWorkItemLink).ToList());
     }
 
@@ -92,6 +93,66 @@ public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config)
         var decoded = WebUtility.HtmlDecode(withoutTags);
 
         return Regex.Replace(decoded, "\\n{3,}", "\n\n").Trim();
+    }
+
+    private static IReadOnlyList<WorkItemTextField> ExtractTextFields(Dictionary<string, JsonElement> fields)
+    {
+        var ignoredFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "System.Title",
+            "System.WorkItemType",
+            "System.State",
+            "System.AssignedTo",
+            "System.Description",
+            "Microsoft.VSTS.Common.AcceptanceCriteria",
+            "System.Tags"
+        };
+
+        var result = new List<WorkItemTextField>();
+
+        foreach (var (name, _) in fields.OrderBy(field => field.Key))
+        {
+            if (ignoredFields.Contains(name))
+            {
+                continue;
+            }
+
+            var value = CleanHtml(GetField(fields, name));
+
+            if (string.IsNullOrWhiteSpace(value) || value.Length < 3)
+            {
+                continue;
+            }
+
+            if (IsUsefulContextField(name, value))
+            {
+                result.Add(new WorkItemTextField(name, value));
+            }
+        }
+
+        return result;
+    }
+
+    private static bool IsUsefulContextField(string name, string value)
+    {
+        var lowerName = name.ToLowerInvariant();
+
+        return lowerName.Contains("code")
+            || lowerName.Contains("dev")
+            || lowerName.Contains("implementation")
+            || lowerName.Contains("steps")
+            || lowerName.Contains("repro")
+            || lowerName.Contains("scenario")
+            || lowerName.Contains("business")
+            || lowerName.Contains("requirement")
+            || lowerName.Contains("comment")
+            || lowerName.Contains("analysis")
+            || value.Contains("http", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("pull request", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("commit", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("changeset", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".cs", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".sql", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string TrimError(string body)

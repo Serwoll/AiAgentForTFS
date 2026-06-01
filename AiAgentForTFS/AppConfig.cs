@@ -19,7 +19,7 @@ public sealed record AppConfig(
             ?? settings.AzureDevOps?.Pat;
         var apiVersion = GetOptional("AZURE_DEVOPS_API_VERSION", "TFS_API_VERSION")
             ?? settings.AzureDevOps?.ApiVersion
-            ?? "7.1";
+            ?? "7.0";
         var ollamaUrlText = Environment.GetEnvironmentVariable("OLLAMA_URL")
             ?? settings.Ollama?.Url
             ?? "http://localhost:11434";

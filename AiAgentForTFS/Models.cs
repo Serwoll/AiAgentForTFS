@@ -9,7 +9,12 @@ public sealed record WorkItemContext(
     string? Description,
     string? AcceptanceCriteria,
     string? Tags,
+    IReadOnlyList<WorkItemTextField> TextFields,
     IReadOnlyList<WorkItemLink> Links);
+
+public sealed record WorkItemTextField(
+    string Name,
+    string Value);
 
 public sealed record WorkItemLink(
     string Relation,

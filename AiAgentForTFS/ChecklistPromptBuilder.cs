@@ -36,6 +36,22 @@ public static class ChecklistPromptBuilder
         prompt.AppendLine("Acceptance Criteria:");
         prompt.AppendLine(EmptyIfMissing(workItem.AcceptanceCriteria));
         prompt.AppendLine();
+        prompt.AppendLine("Additional text fields from the User Story, including possible code or implementation context:");
+
+        if (workItem.TextFields.Count == 0)
+        {
+            prompt.AppendLine("No extra text fields were found.");
+        }
+        else
+        {
+            foreach (var field in workItem.TextFields)
+            {
+                prompt.AppendLine($"### {field.Name}");
+                prompt.AppendLine(field.Value);
+                prompt.AppendLine();
+            }
+        }
+
         prompt.AppendLine("Related links, code links, pull requests, commits, changesets, attachments:");
 
         if (workItem.Links.Count == 0)
