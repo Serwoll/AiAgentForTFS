@@ -12,8 +12,10 @@ public static class ChecklistPromptBuilder
         prompt.AppendLine("Use Russian language.");
         prompt.AppendLine("Return Markdown only.");
         prompt.AppendLine("Use checkboxes for checklist items.");
+        prompt.AppendLine("Use checkboxes only inside QA Checklist, Regression Areas, and Open Questions. Do not use checkboxes in Source User Story or Context Summary.");
         prompt.AppendLine("Do not invent missing business rules. Put unclear points into Open Questions.");
-        prompt.AppendLine("When a checklist item is based on code, pull request, commit, changeset, branch, or implementation context, add the marker [code-context].");
+        prompt.AppendLine("Group QA checklist items by stages or functional areas when the User Story contains stages, modules, settings, or components.");
+        prompt.AppendLine("When a checklist item is based on actual PR metadata, commit messages, or changed file paths, add the marker [code-context].");
         prompt.AppendLine("When a checklist item is based only on User Story text or acceptance criteria, do not add that marker.");
         prompt.AppendLine();
         prompt.AppendLine("Required structure:");
@@ -73,6 +75,80 @@ public static class ChecklistPromptBuilder
             }
         }
 
+        prompt.AppendLine();
+        prompt.AppendLine("Pull Request Context:");
+
+        if (workItem.CodeContextSources.Count == 0)
+        {
+            prompt.AppendLine("No pull request metadata, commits, or changed files were loaded.");
+        }
+        else
+        {
+            foreach (var source in workItem.CodeContextSources)
+            {
+                prompt.AppendLine($"## {source.SourceType} {source.PullRequestId}");
+                prompt.AppendLine($"Repository: {source.RepositoryId}");
+                prompt.AppendLine($"Title: {source.Title ?? "Unknown"}");
+                prompt.AppendLine($"Source Branch: {source.SourceBranch ?? "Unknown"}");
+                prompt.AppendLine($"Target Branch: {source.TargetBranch ?? "Unknown"}");
+                prompt.AppendLine();
+                prompt.AppendLine("Commit messages:");
+
+                if (source.CommitMessages.Count == 0)
+                {
+                    prompt.AppendLine("- None loaded.");
+                }
+                else
+                {
+                    foreach (var commitMessage in source.CommitMessages)
+                    {
+                        prompt.AppendLine($"- {commitMessage}");
+                    }
+                }
+
+                prompt.AppendLine();
+                prompt.AppendLine("Changed files:");
+
+                if (source.ChangedFiles.Count == 0)
+                {
+                    prompt.AppendLine("- None loaded.");
+                }
+                else
+                {
+                    foreach (var changedFile in source.ChangedFiles)
+                    {
+                        prompt.AppendLine($"- {changedFile}");
+                    }
+                }
+
+                if (source.CommitLimitReached)
+                {
+                    prompt.AppendLine("- Warning: commit list was truncated.");
+                }
+
+                if (source.ChangedFileLimitReached)
+                {
+                    prompt.AppendLine("- Warning: changed file list was truncated.");
+                }
+
+                prompt.AppendLine();
+            }
+        }
+
+        prompt.AppendLine("Code Context Warnings:");
+
+        if (workItem.CodeContextWarnings.Count == 0)
+        {
+            prompt.AppendLine("None.");
+        }
+        else
+        {
+            foreach (var warning in workItem.CodeContextWarnings)
+            {
+                prompt.AppendLine($"- {warning}");
+            }
+        }
+
         return prompt.ToString();
     }
 
@@ -103,7 +179,7 @@ public static class ChecklistPromptBuilder
         audit.AppendLine();
         audit.AppendLine("### Code/implementation context sources");
 
-        if (codeFields.Count == 0 && codeLinks.Count == 0)
+        if (codeFields.Count == 0 && codeLinks.Count == 0 && workItem.CodeContextSources.Count == 0)
         {
             audit.AppendLine("- No explicit code/implementation context sources were detected in the User Story fields or relations.");
         }
@@ -117,6 +193,54 @@ public static class ChecklistPromptBuilder
             foreach (var link in codeLinks)
             {
                 audit.AppendLine($"- Link: `{link.Relation}` - {link.Name ?? link.Url}");
+            }
+
+            foreach (var source in workItem.CodeContextSources)
+            {
+                audit.AppendLine($"- {source.SourceType}: PR `{source.PullRequestId}` - {source.Title ?? "Untitled"}");
+                audit.AppendLine($"  - Repository: `{source.RepositoryId}`");
+                audit.AppendLine($"  - Branches: `{source.SourceBranch ?? "unknown"}` -> `{source.TargetBranch ?? "unknown"}`");
+                audit.AppendLine($"  - Commit messages loaded: {source.CommitMessages.Count}");
+                audit.AppendLine($"  - Changed files loaded: {source.ChangedFiles.Count}");
+
+                if (source.CommitLimitReached)
+                {
+                    audit.AppendLine("  - Commit list was truncated.");
+                }
+
+                if (source.ChangedFileLimitReached)
+                {
+                    audit.AppendLine("  - Changed file list was truncated.");
+                }
+
+                if (source.CommitMessages.Count > 0)
+                {
+                    audit.AppendLine("  - Commits:");
+                    foreach (var commitMessage in source.CommitMessages.Take(20))
+                    {
+                        audit.AppendLine($"    - {commitMessage}");
+                    }
+                }
+
+                if (source.ChangedFiles.Count > 0)
+                {
+                    audit.AppendLine("  - Changed files:");
+                    foreach (var changedFile in source.ChangedFiles.Take(100))
+                    {
+                        audit.AppendLine($"    - `{changedFile}`");
+                    }
+                }
+            }
+        }
+
+        if (workItem.CodeContextWarnings.Count > 0)
+        {
+            audit.AppendLine();
+            audit.AppendLine("### Code context warnings");
+
+            foreach (var warning in workItem.CodeContextWarnings)
+            {
+                audit.AppendLine($"- {warning}");
             }
         }
 

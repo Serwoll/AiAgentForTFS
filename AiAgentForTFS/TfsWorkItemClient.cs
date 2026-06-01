@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace AiAgentForTFS;
 
-public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config)
+public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config, AzureDevOpsGitClient? gitClient = null)
 {
     public async Task<WorkItemContext> GetWorkItemAsync(int workItemId, CancellationToken cancellationToken = default)
     {
@@ -26,7 +26,7 @@ public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config)
 
         var fields = workItem.Fields ?? [];
 
-        return new WorkItemContext(
+        var context = new WorkItemContext(
             workItem.Id,
             GetField(fields, "System.Title") ?? $"Work Item {workItem.Id}",
             GetField(fields, "System.WorkItemType") ?? "Unknown",
@@ -36,7 +36,13 @@ public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config)
             CleanHtml(GetField(fields, "Microsoft.VSTS.Common.AcceptanceCriteria")),
             GetField(fields, "System.Tags"),
             ExtractTextFields(fields),
-            (workItem.Relations ?? []).Select(ToWorkItemLink).ToList());
+            (workItem.Relations ?? []).Select(ToWorkItemLink).ToList(),
+            [],
+            []);
+
+        return gitClient is null
+            ? context
+            : await gitClient.EnrichAsync(context, cancellationToken);
     }
 
     private string BuildWorkItemUrl(int workItemId)
