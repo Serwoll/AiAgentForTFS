@@ -13,6 +13,8 @@ public static class ChecklistPromptBuilder
         prompt.AppendLine("Return Markdown only.");
         prompt.AppendLine("Use checkboxes for checklist items.");
         prompt.AppendLine("Do not invent missing business rules. Put unclear points into Open Questions.");
+        prompt.AppendLine("When a checklist item is based on code, pull request, commit, changeset, branch, or implementation context, add the marker [code-context].");
+        prompt.AppendLine("When a checklist item is based only on User Story text or acceptance criteria, do not add that marker.");
         prompt.AppendLine();
         prompt.AppendLine("Required structure:");
         prompt.AppendLine("# QA Checklist");
@@ -46,7 +48,8 @@ public static class ChecklistPromptBuilder
         {
             foreach (var field in workItem.TextFields)
             {
-                prompt.AppendLine($"### {field.Name}");
+                var marker = field.LooksLikeCodeContext ? " [code-context-source]" : "";
+                prompt.AppendLine($"### {field.Name}{marker}");
                 prompt.AppendLine(field.Value);
                 prompt.AppendLine();
             }
@@ -62,7 +65,8 @@ public static class ChecklistPromptBuilder
         {
             foreach (var link in workItem.Links)
             {
-                prompt.AppendLine($"- Relation: {link.Relation}");
+                var marker = link.LooksLikeCodeContext ? " [code-context-source]" : "";
+                prompt.AppendLine($"- Relation: {link.Relation}{marker}");
                 prompt.AppendLine($"  Name: {link.Name ?? "Unknown"}");
                 prompt.AppendLine($"  Url: {link.Url}");
                 prompt.AppendLine($"  Comment: {link.Comment ?? "None"}");
@@ -81,7 +85,57 @@ public static class ChecklistPromptBuilder
             result = $"# QA Checklist for US {workItem.Id}: {workItem.Title}{Environment.NewLine}{Environment.NewLine}{result}";
         }
 
-        return result + Environment.NewLine;
+        return result + Environment.NewLine + BuildContextAudit(workItem);
+    }
+
+    private static string BuildContextAudit(WorkItemContext workItem)
+    {
+        var audit = new StringBuilder();
+        var codeFields = workItem.TextFields.Where(field => field.LooksLikeCodeContext).ToList();
+        var otherFields = workItem.TextFields.Where(field => !field.LooksLikeCodeContext).ToList();
+        var codeLinks = workItem.Links.Where(link => link.LooksLikeCodeContext).ToList();
+        var otherLinks = workItem.Links.Where(link => !link.LooksLikeCodeContext).ToList();
+
+        audit.AppendLine();
+        audit.AppendLine("---");
+        audit.AppendLine();
+        audit.AppendLine("## Context used by agent");
+        audit.AppendLine();
+        audit.AppendLine("### Code/implementation context sources");
+
+        if (codeFields.Count == 0 && codeLinks.Count == 0)
+        {
+            audit.AppendLine("- No explicit code/implementation context sources were detected in the User Story fields or relations.");
+        }
+        else
+        {
+            foreach (var field in codeFields)
+            {
+                audit.AppendLine($"- Field: `{field.Name}`");
+            }
+
+            foreach (var link in codeLinks)
+            {
+                audit.AppendLine($"- Link: `{link.Relation}` - {link.Name ?? link.Url}");
+            }
+        }
+
+        audit.AppendLine();
+        audit.AppendLine("### Other context sources");
+        audit.AppendLine($"- Description: {(string.IsNullOrWhiteSpace(workItem.Description) ? "missing" : "used")}");
+        audit.AppendLine($"- Acceptance Criteria: {(string.IsNullOrWhiteSpace(workItem.AcceptanceCriteria) ? "missing" : "used")}");
+
+        foreach (var field in otherFields)
+        {
+            audit.AppendLine($"- Field: `{field.Name}`");
+        }
+
+        foreach (var link in otherLinks)
+        {
+            audit.AppendLine($"- Link: `{link.Relation}` - {link.Name ?? link.Url}");
+        }
+
+        return audit.ToString();
     }
 
     private static string EmptyIfMissing(string? value)

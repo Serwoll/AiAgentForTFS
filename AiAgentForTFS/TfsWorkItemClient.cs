@@ -58,7 +58,8 @@ public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config)
             relation.Rel ?? "Unknown",
             relation.Url ?? "",
             GetField(attributes, "name"),
-            GetField(attributes, "comment"));
+            GetField(attributes, "comment"),
+            LooksLikeCodeContext(relation.Rel, relation.Url, GetField(attributes, "name"), GetField(attributes, "comment")));
     }
 
     private static string? GetField(Dictionary<string, JsonElement> fields, string name)
@@ -126,7 +127,7 @@ public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config)
 
             if (IsUsefulContextField(name, value))
             {
-                result.Add(new WorkItemTextField(name, value));
+                result.Add(new WorkItemTextField(name, value, LooksLikeCodeContext(name, value)));
             }
         }
 
@@ -153,6 +154,34 @@ public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config)
             || value.Contains("changeset", StringComparison.OrdinalIgnoreCase)
             || value.Contains(".cs", StringComparison.OrdinalIgnoreCase)
             || value.Contains(".sql", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeCodeContext(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            if (value.Contains("code", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("pull request", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("pullrequest", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("commit", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("changeset", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("branch", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("repo", StringComparison.OrdinalIgnoreCase)
+                || value.Contains(".cs", StringComparison.OrdinalIgnoreCase)
+                || value.Contains(".cpp", StringComparison.OrdinalIgnoreCase)
+                || value.Contains(".h", StringComparison.OrdinalIgnoreCase)
+                || value.Contains(".sql", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string TrimError(string body)

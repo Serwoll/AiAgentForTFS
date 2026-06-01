@@ -14,10 +14,12 @@ public sealed record WorkItemContext(
 
 public sealed record WorkItemTextField(
     string Name,
-    string Value);
+    string Value,
+    bool LooksLikeCodeContext);
 
 public sealed record WorkItemLink(
     string Relation,
     string Url,
     string? Name,
-    string? Comment);
+    string? Comment,
+    bool LooksLikeCodeContext);
