@@ -6,6 +6,12 @@
 # dotenv files
 .env
 
+# Local app settings may contain PATs or internal URLs.
+appsettings.json
+**/appsettings.json
+!appsettings.example.json
+!**/appsettings.example.json
+
 # User-specific files
 *.rsuser
 *.suo
