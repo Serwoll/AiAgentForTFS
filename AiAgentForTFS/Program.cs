@@ -20,7 +20,7 @@ static async Task<int> RunAsync(string[] args)
         {
             "generate-qa-checklist" => await RunGenerateQaChecklistAsync(args),
             "chat" => await RunChatAsync(),
-            "agent-demo" => await RunAgentDemoAsync(),
+            "agent-demo" => await RunAgentDemoAsync(args),
             _ => PrintUsageAndReturn()
         };
     }
@@ -46,8 +46,18 @@ static async Task<int> RunAsync(string[] args)
     }
 }
 
-static async Task<int> RunAgentDemoAsync()
+static async Task<int> RunAgentDemoAsync(string[] args)
 {
+    if (args.Length != 2)
+    {
+        PrintUsage();
+        return 1;
+    }
+    if (!int.TryParse(args[1], out var workItemId) || workItemId <= 0)
+    {
+        PrintUsage();
+        return 1;
+    }
     var config = AppConfig.FromEnvironment();
     var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
     var agentOptions = new ChatClientAgentOptions
@@ -62,7 +72,7 @@ static async Task<int> RunAgentDemoAsync()
         }
     };
     AIAgent agent = chatClient.AsAIAgent(agentOptions);
-    var response = await agent.RunAsync("Сгенерируй QA чек-лист по User Story 35693. Используй доступные tools");
+    var response = await agent.RunAsync($"Сгенерируй QA чек-лист по User Story {workItemId}. Используй доступные tools");
     Console.WriteLine(response);
     return 0;
 }
@@ -261,7 +271,7 @@ static void PrintUsage()
     Console.WriteLine("Usage:");
     Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- generate-qa-checklist <workItemId>");
     Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- chat");
-    Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- agent-demo");
+    Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- agent-demo <workItemId>");
     Console.WriteLine();
     Console.WriteLine("Environment variables:");
     Console.WriteLine("  AZURE_DEVOPS_BASE_URL  Example: https://dev.azure.com/org/project");
