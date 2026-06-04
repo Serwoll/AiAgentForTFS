@@ -70,6 +70,7 @@ static async Task<int> RunAgentDemoAsync()
 [Description("Get User Story by id take Title, Description, code context")]
 static string GetUserStoryById([Description("Id for User Story")] int workItemId)
 {
+    Console.WriteLine($"TOOL CALLED: GetUserStoryById({workItemId})");
     return
     """ 
     Id: 35693
