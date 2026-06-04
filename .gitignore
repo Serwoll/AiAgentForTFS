@@ -489,3 +489,6 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 AiAgentForTFS/output/
+
+# Local comparison/sample projects.
+ChatAiTelegramBot-master/

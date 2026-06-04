@@ -1,0 +1,4 @@
+interface:
+  display_name: "AiAgentForTFS Project"
+  short_description: "Project guide for AiAgentForTFS"
+  default_prompt: "Use AiAgentForTFS project guidance"

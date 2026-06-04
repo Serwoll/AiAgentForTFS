@@ -1,6 +1,7 @@
-using AiAgentForTFS;
+﻿using AiAgentForTFS;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using System.ComponentModel;
 using System.Diagnostics;
 
 return await RunAsync(args);
@@ -19,6 +20,7 @@ static async Task<int> RunAsync(string[] args)
         {
             "generate-qa-checklist" => await RunGenerateQaChecklistAsync(args),
             "chat" => await RunChatAsync(),
+            "agent-demo" => await RunAgentDemoAsync(),
             _ => PrintUsageAndReturn()
         };
     }
@@ -43,6 +45,44 @@ static async Task<int> RunAsync(string[] args)
         return 5;
     }
 }
+
+static async Task<int> RunAgentDemoAsync()
+{
+    var config = AppConfig.FromEnvironment();
+    var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
+    var agentOptions = new ChatClientAgentOptions
+    {
+        ChatOptions = new()
+        {
+            Tools =
+        [
+            AIFunctionFactory.Create(GetUserStoryById)
+        ],
+            Instructions = "You are a senior QA engineer. Return practical Markdown only."
+        }
+    };
+    AIAgent agent = chatClient.AsAIAgent(agentOptions);
+    var response = await agent.RunAsync("Сгенерируй QA чек-лист по User Story 35693. Используй доступные tools");
+    Console.WriteLine(response);
+    return 0;
+}
+
+[Description("Get User Story by id take Title, Description, code context")]
+static string GetUserStoryById([Description("Id for User Story")] int workItemId)
+{
+    return
+    """ 
+    Id: 35693
+    Type: User Story
+    Title: Добавить локальную справку в MS4Web
+    State: Active
+    Assigned To: Васенев Андрей Андреевич
+    Tags: Branch; MS4Web; NeedMerge1.3.10; Справка
+    Description: По аналогии с MS4D, если отсутствует подключение кдел ""Разное"", настройка ""Использовать локальную справку"") - необходимо использовать не веб-версию справки, а локальную. Для этого необходимо определиться с форматом хранения (вероятно файлы html в чистом виде, для кроссплатформенности), и в пайплайне добавить локальную справку в сборку. В самом редакторе необходимо добавить настройку среды, и реализовать механизм открытия локальной справки.
+    """;
+}
+
+
 
 static async Task<int> RunGenerateQaChecklistAsync(string[] args)
 {
@@ -220,6 +260,7 @@ static void PrintUsage()
     Console.WriteLine("Usage:");
     Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- generate-qa-checklist <workItemId>");
     Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- chat");
+    Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- agent-demo");
     Console.WriteLine();
     Console.WriteLine("Environment variables:");
     Console.WriteLine("  AZURE_DEVOPS_BASE_URL  Example: https://dev.azure.com/org/project");
