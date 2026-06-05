@@ -1,7 +1,6 @@
 ﻿using AiAgentForTFS;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using System.ComponentModel;
 using System.Diagnostics;
 
 return await RunAsync(args);
@@ -72,7 +71,19 @@ static async Task<int> RunAgentDemoAsync(string[] args)
         [
             AIFunctionFactory.Create(tools.GetUserStoryById)
         ],
-            Instructions = "You are a senior QA engineer. Return practical Markdown only."
+            Instructions =
+            """
+            You are a senior QA engineer.
+
+            Rules:
+            - Answer in Russian.
+            - Use Markdown only.
+            - Use checklist items in "- [ ]" format.
+            - Use only facts from tool results.
+            - Mark PR/commit/file based checks with [code-context].
+            - Do not add Prepared by or Date.
+            - If information is missing, add it to Open Questions instead of inventing requirements.
+            """
         }
     };
     AIAgent agent = chatClient.AsAIAgent(agentOptions);
@@ -80,24 +91,6 @@ static async Task<int> RunAgentDemoAsync(string[] args)
     Console.WriteLine(response);
     return 0;
 }
-
-[Description("Get User Story by id take Title, Description, code context")]
-static string GetUserStoryById([Description("Id for User Story")] int workItemId)
-{
-    Console.WriteLine($"TOOL CALLED: GetUserStoryById({workItemId})");
-    return
-    """ 
-    Id: 35693
-    Type: User Story
-    Title: Добавить локальную справку в MS4Web
-    State: Active
-    Assigned To: Васенев Андрей Андреевич
-    Tags: Branch; MS4Web; NeedMerge1.3.10; Справка
-    Description: По аналогии с MS4D, если отсутствует подключение кдел ""Разное"", настройка ""Использовать локальную справку"") - необходимо использовать не веб-версию справки, а локальную. Для этого необходимо определиться с форматом хранения (вероятно файлы html в чистом виде, для кроссплатформенности), и в пайплайне добавить локальную справку в сборку. В самом редакторе необходимо добавить настройку среды, и реализовать механизм открытия локальной справки.
-    """;
-}
-
-
 
 static async Task<int> RunGenerateQaChecklistAsync(string[] args)
 {

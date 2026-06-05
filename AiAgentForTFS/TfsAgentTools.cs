@@ -1,5 +1,5 @@
+using System.ComponentModel;
 using System.Text;
-using Google.Protobuf.Reflection;
 
 namespace AiAgentForTFS;
 
@@ -12,7 +12,8 @@ public sealed class TfsAgentTools
         _tfsClient = tfsClient;
     }
 
-    public async Task<string> GetUserStoryById(int workItemId)
+    [Description("Gets Azure DevOps/TFS User Story by work item id and returns title, description, acceptance criteria, links, pull request context, commit messages, and changed files summary.")]
+    public async Task<string> GetUserStoryById([Description("Azure DevOps/TFS work item id of the User Story.")] int workItemId)
     {
         var workItem = await _tfsClient.GetWorkItemAsync(workItemId);
         var links = string.Join(Environment.NewLine, workItem.Links.Select(link => $"- {link.Name}: {link.Url}"));
@@ -21,6 +22,7 @@ public sealed class TfsAgentTools
         return
         $"""
         Id: {workItem.Id}
+        Title: {workItem.Title}
         Type: {workItem.Type}
         State: {workItem.State}
         Assigned To: {workItem.AssignedTo}
@@ -58,6 +60,11 @@ public sealed class TfsAgentTools
                 }
             }
             build.AppendLine($"Changed files count: {source.ChangedFiles.Count}");
+            build.AppendLine($"Changed files:");
+            foreach (var changedFile in source.ChangedFiles)
+            {
+                build.AppendLine($"- {changedFile}");
+            }
         }
         return build.ToString();
     }
