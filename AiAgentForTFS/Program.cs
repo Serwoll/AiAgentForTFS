@@ -59,14 +59,18 @@ static async Task<int> RunAgentDemoAsync(string[] args)
         return 1;
     }
     var config = AppConfig.FromEnvironment();
+    using var httpClient = CreateHttpClient();
+    var gitClient = new AzureDevOpsGitClient(httpClient, config);
+    var tfsClient = new TfsWorkItemClient(httpClient, config, gitClient);
     var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
+    var tools = new TfsAgentTools(tfsClient);
     var agentOptions = new ChatClientAgentOptions
     {
         ChatOptions = new()
         {
             Tools =
         [
-            AIFunctionFactory.Create(GetUserStoryById)
+            AIFunctionFactory.Create(tools.GetUserStoryById)
         ],
             Instructions = "You are a senior QA engineer. Return practical Markdown only."
         }
