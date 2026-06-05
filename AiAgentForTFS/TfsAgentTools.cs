@@ -5,6 +5,8 @@ namespace AiAgentForTFS;
 
 public sealed class TfsAgentTools
 {
+    private const int MaxChangedFilesInToolResult = 30;
+
     private readonly TfsWorkItemClient _tfsClient;
 
     public TfsAgentTools(TfsWorkItemClient tfsClient)
@@ -61,9 +63,14 @@ public sealed class TfsAgentTools
             }
             build.AppendLine($"Changed files count: {source.ChangedFiles.Count}");
             build.AppendLine($"Changed files:");
-            foreach (var changedFile in source.ChangedFiles)
+            foreach (var changedFile in source.ChangedFiles.Take(MaxChangedFilesInToolResult))
             {
                 build.AppendLine($"- {changedFile}");
+            }
+
+            if (source.ChangedFiles.Count > MaxChangedFilesInToolResult || source.ChangedFileLimitReached)
+            {
+                build.AppendLine("Changed files list truncated.");
             }
         }
         return build.ToString();
