@@ -63,15 +63,8 @@ static async Task<int> RunAgentDemoAsync(string[] args)
     var tfsClient = new TfsWorkItemClient(httpClient, config, gitClient);
     var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
     var tools = new TfsAgentTools(tfsClient);
-    var agentOptions = new ChatClientAgentOptions
-    {
-        ChatOptions = new()
-        {
-            Tools =
-        [
-            AIFunctionFactory.Create(tools.GetUserStoryById)
-        ],
-            Instructions =
+    AIAgent agent = chatClient.AsAIAgent(
+        instructions:
             """
             You are a senior QA engineer.
 
@@ -83,10 +76,11 @@ static async Task<int> RunAgentDemoAsync(string[] args)
             - Mark PR/commit/file based checks with [code-context].
             - Do not add Prepared by or Date.
             - If information is missing, add it to Open Questions instead of inventing requirements.
-            """
-        }
-    };
-    AIAgent agent = chatClient.AsAIAgent(agentOptions);
+            """,
+        tools:
+        [
+            AIFunctionFactory.Create(tools.GetUserStoryById)
+        ]);
     var response = await agent.RunAsync($"Сгенерируй QA чек-лист по User Story {workItemId}. Используй доступные tools");
     Console.WriteLine(response);
     return 0;
