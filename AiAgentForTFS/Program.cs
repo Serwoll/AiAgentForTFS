@@ -71,7 +71,6 @@ static async Task<int> RunAgentDemoAsync(string[] args)
             Rules:
             - Answer in Russian.
             - Use Markdown only.
-            - Use checklist items in "- [ ]" format.
             - Use only facts from tool results.
             - Mark PR/commit/file based checks with [code-context].
             - Do not add Prepared by or Date.
@@ -81,7 +80,35 @@ static async Task<int> RunAgentDemoAsync(string[] args)
         [
             AIFunctionFactory.Create(tools.GetUserStoryById)
         ]);
-    var response = await agent.RunAsync($"Сгенерируй QA чек-лист по User Story {workItemId}. Используй доступные tools");
+    var response = await agent.RunAsync($"""
+    Сгенерируй QA чек-лист по User Story {workItemId}.
+    Используй доступные tools.
+    Не пересказывай Pull Request.
+    Не создавай Acceptance Criteria.
+    Не выводи список changed files отдельной секцией.
+    Не добавляй Prepared by, Date, Notes.
+    Верни только чек-лист по струтуре:
+    # QA Checklist
+
+    ## User Story
+    - ID:
+    - Title:
+    - State:
+    - Tags:
+
+    ## Context
+    - 3-5 коротких пунктов только по фактам из User Story и tool results.
+
+    ## Checklist
+    - [ ] Основные QA-проверки.
+    - [ ] Пункты, основанные на PR/commit/changed files, помечай [code-context].
+
+    ## Regression
+    - [ ] Проверки зон, которые могли быть затронуты изменениями.
+
+    ## Open Questions
+    - Вопросы, если данных недостаточно.
+    """);
     Console.WriteLine(response);
     return 0;
 }
