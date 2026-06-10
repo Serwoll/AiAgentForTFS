@@ -19,7 +19,7 @@ public sealed class TfsAgentTools
     {
         Console.WriteLine($"TOOL CALLED: GetUserStoryById({workItemId})");
         var workItem = await _tfsClient.GetWorkItemAsync(workItemId);
-        var links = string.Join(Environment.NewLine, workItem.Links.Select(link => $"<link>{link.Name}-{link.Url}</links>"));
+        var links = string.Join(Environment.NewLine, workItem.Links.Select(link => $"<link>{link.Name}-{link.Url}</link>"));
         var codeContext = Build(workItem);
 
         return
@@ -73,8 +73,8 @@ public sealed class TfsAgentTools
                 }
                 build.AppendLine("</commit_messages>");
             }
-            build.AppendLine("<changed_files usage=\"context_only\">");
-            build.AppendLine($"<count>{source.ChangedFiles.Count}</count>");
+            build.AppendLine("<code_context_summary  usage=\"context_only\">");
+            build.AppendLine($"<changed_files_count>{source.ChangedFiles.Count}</changed_files_count>");
             build.AppendLine("<note>Use file paths only to enrich QA checklist items. Do not summarize files. Do not write implementation steps.</note>");
 
             foreach (var changedFile in source.ChangedFiles.Take(MaxChangedFilesInToolResult))
@@ -86,7 +86,7 @@ public sealed class TfsAgentTools
             {
                 build.AppendLine("<truncated>true</truncated>");
             }
-            build.AppendLine("</changed_files>");
+            build.AppendLine("</code_context_summary >");
             build.AppendLine("</pr>");
         }
         return build.ToString();
