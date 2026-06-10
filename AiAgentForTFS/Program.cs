@@ -68,47 +68,62 @@ static async Task<int> RunAgentDemoAsync(string[] args)
             """
             You are a senior QA engineer.
 
+             You are a senior QA engineer.
+
             Rules:
             - Answer in Russian.
             - Use Markdown only.
-            - Use only facts from tool results.
-            - Mark PR/commit/file based checks with [code-context].
-            - Do not add Prepared by or Date.
-            - If information is missing, add it to Open Questions instead of inventing requirements.
+            - Do not add Prepared by, Date, or Notes.
+            - Copy User Story metadata exactly from tool results: ID, Title, State, Tags.
+            - The User Story text is the primary source of truth.
+            - Use code context as secondary evidence only: affected areas, regression scope, and implementation-specific risks.
+            - The checklist must validate user-visible product behavior, not internal code structure.
+            - Translate code context into QA-verifiable behavior before writing a checklist item.
+            - Mark checks based on PR, commits, or changed files with [code-context].
+            - Do not add generic QA checks just because they are common.
+            - Do not turn assumptions into checklist items.
+            - If information is missing or ambiguous, add a specific question to Open Questions.
+            - Every explicit condition from the User Story description must be covered by at least one checklist item.
             """,
         tools:
         [
             AIFunctionFactory.Create(tools.GetUserStoryById)
         ]);
     var response = await agent.RunAsync($"""
-    Сгенерируй QA чек-лист по User Story {workItemId}.
-    Используй доступные tools.
-    После получение результатов tool, перечитай сам промт и инструкции, чтобы не забыть ничего.
-    Не пересказывай Pull Request.
-    Не создавай Acceptance Criteria.
-    Не выводи список changed files отдельной секцией.
-    Не добавляй Prepared by, Date, Notes.
-    Верни только чек-лист по струтуре:
-    # QA Checklist
+        Сгенерируй QA чек-лист по User Story {workItemId}.
+        Используй tools для получения User Story и code context.
 
-    ## User Story
-    - ID:
-    - Title:
-    - State:
-    - Tags:
+        Порядок работы:
+            1. Извлеки из описания User Story только явные условия вида: триггер/настройка/состояние -> ожидаемое поведение.
+            2. Для каждого такого условия создай отдельный QA-пункт в секции Checklist.
+            3. Не добавляй code-context пункты, пока все явные условия User Story не покрыты.
+            4. Code context используй только после этого: для регресса, затронутых областей и проверок сборки/интеграции.
+            5. Любой code-context пункт формулируй как проверяемое поведение продукта, а не как проверку файла, класса или модуля.
+        Не добавляй проверки на основе предположений. Если данных не хватает, задай вопрос в Open Questions.
+        Метаданные ID, Title, State, Tags скопируй дословно из tool result.
 
-    ## Context
-    - 3-5 коротких пунктов только по фактам из User Story и tool results.
+        Верни только Markdown:
 
-    ## Checklist
-    - [ ] Основные QA-проверки.
-    - [ ] Пункты, основанные на PR/commit/changed files, помечай [code-context].
+        # QA Checklist
 
-    ## Regression
-    - [ ] Проверки зон, которые могли быть затронуты изменениями.
+        ## User Story
+        - ID:
+        - Title:
+        - State:
+        - Tags:
 
-    ## Open Questions
-    - Вопросы, если данных недостаточно.
+        ## Context
+        - 3-5 коротких фактов из User Story и tool results.
+
+        ## Checklist
+        - Проверки явных условий User Story.
+        - [code-context] Дополнительные проверки поведения фичи на основе code context.
+
+        ## Regression
+        - Регрессионные проверки затронутых областей.
+
+        ## Open Questions
+        - Вопросы, если данных недостаточно.
     """);
     Console.WriteLine(response);
     return 0;

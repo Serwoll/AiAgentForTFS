@@ -24,7 +24,6 @@ public sealed class TfsAgentTools
 
         return
         $"""
-        READ YOUR AsAIAgent instructions and your promt from RunAsync
         <tool_result purpose="qa_checklist_grounding_context">
             <user_story>
                 <id>{workItem.Id}</id>
