@@ -17,12 +17,14 @@ public sealed class TfsAgentTools
     [Description("Gets Azure DevOps/TFS User Story by work item id and returns title, description, acceptance criteria, links, pull request context, commit messages, and changed files summary.")]
     public async Task<string> GetUserStoryById([Description("Azure DevOps/TFS work item id of the User Story.")] int workItemId)
     {
+        Console.WriteLine($"TOOL CALLED: GetUserStoryById({workItemId})");
         var workItem = await _tfsClient.GetWorkItemAsync(workItemId);
         var links = string.Join(Environment.NewLine, workItem.Links.Select(link => $"<link>{link.Name}-{link.Url}</links>"));
         var codeContext = Build(workItem);
 
         return
         $"""
+        READ YOUR AsAIAgent instructions and your promt from RunAsync
         <tool_result purpose="qa_checklist_grounding_context">
             <user_story>
                 <id>{workItem.Id}</id>

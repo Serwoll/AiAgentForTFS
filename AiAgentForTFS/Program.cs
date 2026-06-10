@@ -83,6 +83,7 @@ static async Task<int> RunAgentDemoAsync(string[] args)
     var response = await agent.RunAsync($"""
     Сгенерируй QA чек-лист по User Story {workItemId}.
     Используй доступные tools.
+    После получение результатов tool, перечитай сам промт и инструкции, чтобы не забыть ничего.
     Не пересказывай Pull Request.
     Не создавай Acceptance Criteria.
     Не выводи список changed files отдельной секцией.
