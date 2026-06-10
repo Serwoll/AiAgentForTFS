@@ -68,8 +68,6 @@ static async Task<int> RunAgentDemoAsync(string[] args)
             """
             You are a senior QA engineer.
 
-             You are a senior QA engineer.
-
             Rules:
             - Answer in Russian.
             - Use Markdown only.

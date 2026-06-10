@@ -5,7 +5,7 @@ namespace AiAgentForTFS;
 
 public sealed class TfsAgentTools
 {
-    private const int MaxChangedFilesInToolResult = 30;
+    private const int MaxChangedFilesInToolResult = 15;
 
     private readonly TfsWorkItemClient _tfsClient;
 
@@ -74,7 +74,7 @@ public sealed class TfsAgentTools
             }
             build.AppendLine("<code_context_summary  usage=\"context_only\">");
             build.AppendLine($"<changed_files_count>{source.ChangedFiles.Count}</changed_files_count>");
-            build.AppendLine("<note>Use file paths only to enrich QA checklist items. Do not summarize files. Do not write implementation steps.</note>");
+            build.AppendLine("<note>Code context is manual QA coverage evidence only. Convert it into user-visible behavior checks. Do not test files, classes, modules, or services directly.</note>");
 
             foreach (var changedFile in source.ChangedFiles.Take(MaxChangedFilesInToolResult))
             {
@@ -85,7 +85,7 @@ public sealed class TfsAgentTools
             {
                 build.AppendLine("<truncated>true</truncated>");
             }
-            build.AppendLine("</code_context_summary >");
+            build.AppendLine("</code_context_summary>");
             build.AppendLine("</pr>");
         }
         return build.ToString();
