@@ -8,10 +8,12 @@ public sealed class TfsAgentTools
     private const int MaxChangedFilesInToolResult = 15;
 
     private readonly TfsWorkItemClient _tfsClient;
+    private readonly QaChecklistWorkflow _workflow;
 
-    public TfsAgentTools(TfsWorkItemClient tfsClient)
+    public TfsAgentTools(TfsWorkItemClient tfsClient, QaChecklistWorkflow workflow)
     {
         _tfsClient = tfsClient;
+        _workflow = workflow;
     }
 
     [Description("Gets Azure DevOps/TFS User Story by work item id and returns title, description, acceptance criteria, links, pull request context, commit messages, and changed files summary.")]
@@ -89,5 +91,12 @@ public sealed class TfsAgentTools
             build.AppendLine("</pr>");
         }
         return build.ToString();
+    }
+
+    [Description("Generate Check list for User Story from US context")]
+    public async Task<string> GenerateQaChecklistForUserStoryAsync([Description("work item ID")] int workItemId)
+    {
+        var workflow = await _workflow.GenerateForUserStoryAsync(workItemId);
+        return workflow;
     }
 }

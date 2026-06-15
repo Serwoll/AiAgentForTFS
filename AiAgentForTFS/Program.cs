@@ -62,7 +62,8 @@ static async Task<int> RunAgentDemoAsync(string[] args)
     var gitClient = new AzureDevOpsGitClient(httpClient, config);
     var tfsClient = new TfsWorkItemClient(httpClient, config, gitClient);
     var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
-    var tools = new TfsAgentTools(tfsClient);
+    var workflow = new QaChecklistWorkflow(tfsClient, chatClient);
+    var tools = new TfsAgentTools(tfsClient, workflow);
     AIAgent agent = chatClient.AsAIAgent(
         instructions:
             """
@@ -85,43 +86,11 @@ static async Task<int> RunAgentDemoAsync(string[] args)
             """,
         tools:
         [
-            AIFunctionFactory.Create(tools.GetUserStoryById)
+           // AIFunctionFactory.Create(tools.GetUserStoryById),
+            AIFunctionFactory.Create(tools.GenerateQaChecklistForUserStoryAsync)
         ]);
     var response = await agent.RunAsync($"""
-        Сгенерируй QA чек-лист по User Story {workItemId}.
-        Используй tools для получения User Story и code context.
-
-        Порядок работы:
-            1. Извлеки из описания User Story только явные условия вида: триггер/настройка/состояние -> ожидаемое поведение.
-            2. Для каждого такого условия создай отдельный QA-пункт в секции Checklist.
-            3. Не добавляй code-context пункты, пока все явные условия User Story не покрыты.
-            4. Code context используй только после этого: для регресса, затронутых областей и проверок сборки/интеграции.
-            5. Любой code-context пункт формулируй как проверяемое поведение продукта, а не как проверку файла, класса или модуля.
-        Не добавляй проверки на основе предположений. Если данных не хватает, задай вопрос в Open Questions.
-        Метаданные ID, Title, State, Tags скопируй дословно из tool result.
-
-        Верни только Markdown:
-
-        # QA Checklist
-
-        ## User Story
-        - ID:
-        - Title:
-        - State:
-        - Tags:
-
-        ## Context
-        - 3-5 коротких фактов из User Story и tool results.
-
-        ## Checklist
-        - Проверки явных условий User Story.
-        - [code-context] Дополнительные проверки поведения фичи на основе code context.
-
-        ## Regression
-        - Регрессионные проверки затронутых областей.
-
-        ## Open Questions
-        - Вопросы, если данных недостаточно.
+    Сгенерируй QA чек-лист по User Story {workItemId}. Используй доступный tool.
     """);
     Console.WriteLine(response);
     return 0;
