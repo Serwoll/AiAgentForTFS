@@ -161,13 +161,10 @@ public sealed class QaChecklistWorkflow
         - НЕ переписывай чек-лист с нуля.
         - НЕ меняй секции User Story, Context и Checklist.
         - НЕ удаляй существующие пункты.
-        - Используй code context только для добавления manual QA regression checks.
-        - Добавляй новые пункты только в секцию Regression.
-        - Каждый новый пункт из code context начинай с [code-context].
-        - Формулируй проверки как поведение продукта или проверяемый manual QA сценарий.
-        - Не проверяй файлы, классы, методы, сервисы, PR или commits напрямую.
-        - Если code context не даёт понятного manual QA сценария, ничего не добавляй.
-        - Верни полный Markdown чек-лист целиком.
+        - Верни только дополнительные regression checklist items.
+        - Не возвращай полный чек-лист.
+        - Каждый пункт должен начинаться с "[code-context]".
+        - Если code context не дает понятных manual QA проверок, верни только "NONE".
 
         Existing checklist:
         {checklist}
@@ -176,6 +173,11 @@ public sealed class QaChecklistWorkflow
         {codeContextSummary}
         """);
 
-        return response.ToString();
+        var items = response.ToString().Trim();
+        if (items == "NONE")
+            return checklist;
+
+        else
+            return checklist + "\n\n## Code Context Regression\n" + items;
     }
 }
