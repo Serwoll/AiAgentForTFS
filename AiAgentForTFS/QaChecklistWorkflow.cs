@@ -18,8 +18,13 @@ public sealed class QaChecklistWorkflow
 
     public async Task<string> GenerateForUserStoryAsync(int workItemId)
     {
+        Console.WriteLine("Fetching User Story and linked PR context...");
         var workItem = await _workItemClient.GetWorkItemAsync(workItemId);
+
+        Console.WriteLine("Extracting explicit User Story conditions...");
         var conditions = await ExtractConditionsAsync(workItem);
+
+        Console.WriteLine("Generating base QA checklist...");
         var body = await GenerateChecklistAsync(workItem, conditions);
         var finalMarkdown =
         $"""
@@ -33,11 +38,10 @@ public sealed class QaChecklistWorkflow
 
         {body}
         """;
+
+        Console.WriteLine("Preparing code context regression checks...");
         var codeContext = BuildCodeContextSummary(workItem);
         finalMarkdown = await AddCodeContextRegressionAsync(finalMarkdown, codeContext);
-        Console.WriteLine("=== WORKFLOW RESULT ===");
-        Console.WriteLine(finalMarkdown);
-        Console.WriteLine("=== WORKFLOW RESULT END ===");
         return finalMarkdown;
     }
 

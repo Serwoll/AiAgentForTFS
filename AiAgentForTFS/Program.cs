@@ -19,7 +19,6 @@ static async Task<int> RunAsync(string[] args)
         {
             "generate-qa-checklist" => await RunGenerateQaChecklistAsync(args),
             "chat" => await RunChatAsync(),
-            "agent-demo" => await RunAgentDemoAsync(args),
             _ => PrintUsageAndReturn()
         };
     }
@@ -45,43 +44,6 @@ static async Task<int> RunAsync(string[] args)
     }
 }
 
-static async Task<int> RunAgentDemoAsync(string[] args)
-{
-    if (args.Length != 2)
-    {
-        PrintUsage();
-        return 1;
-    }
-    if (!int.TryParse(args[1], out var workItemId) || workItemId <= 0)
-    {
-        PrintUsage();
-        return 1;
-    }
-    var config = AppConfig.FromEnvironment();
-    using var httpClient = CreateHttpClient();
-    var gitClient = new AzureDevOpsGitClient(httpClient, config);
-    var tfsClient = new TfsWorkItemClient(httpClient, config, gitClient);
-    var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
-    var workflow = new QaChecklistWorkflow(tfsClient, chatClient);
-    var tools = new TfsAgentTools(tfsClient, workflow);
-    AIAgent agent = chatClient.AsAIAgent(
-        instructions:
-        """
-        You are a tool router.
-        When the user asks for a QA checklist, call the available tool.
-        Return the tool result exactly as-is.
-        Do not rewrite, summarize, translate, improve, or add anything.
-        """,
-        tools:
-        [
-           // AIFunctionFactory.Create(tools.GetUserStoryById),
-            AIFunctionFactory.Create(tools.GenerateQaChecklistForUserStoryAsync)
-        ]);
-    var response = await workflow.GenerateForUserStoryAsync(workItemId);
-    Console.WriteLine(response);
-    return 0;
-}
-
 static async Task<int> RunGenerateQaChecklistAsync(string[] args)
 {
     if (args.Length != 2)
@@ -101,11 +63,24 @@ static async Task<int> RunGenerateQaChecklistAsync(string[] args)
     using var httpClient = CreateHttpClient();
     var gitClient = new AzureDevOpsGitClient(httpClient, config);
     var tfsClient = new TfsWorkItemClient(httpClient, config, gitClient);
+    var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
+    var workflow = new QaChecklistWorkflow(tfsClient, chatClient);
 
-    Console.WriteLine($"Fetching User Story {workItemId}...");
-    var workItem = await tfsClient.GetWorkItemAsync(workItemId);
+    Console.WriteLine($"Starting QA checklist workflow for User Story {workItemId}...");
+    var generationTimer = Stopwatch.StartNew();
+    var markdown = await workflow.GenerateForUserStoryAsync(workItemId);
+    generationTimer.Stop();
 
-    return await GenerateAndSaveAsync(workItem, config);
+    Directory.CreateDirectory("output");
+    var outputPath = Path.Combine("output", $"us-{workItemId}-qa-checklist.md");
+    await File.WriteAllTextAsync(outputPath, markdown);
+
+    Console.WriteLine();
+    Console.WriteLine(markdown);
+    Console.WriteLine($"Checklist generation time: {FormatElapsed(generationTimer.Elapsed)}");
+    Console.WriteLine($"Saved to: {Path.GetFullPath(outputPath)}");
+
+    return 0;
 }
 
 static async Task<int> RunChatAsync()
@@ -258,7 +233,6 @@ static void PrintUsage()
     Console.WriteLine("Usage:");
     Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- generate-qa-checklist <workItemId>");
     Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- chat");
-    Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- agent-demo <workItemId>");
     Console.WriteLine();
     Console.WriteLine("Environment variables:");
     Console.WriteLine("  AZURE_DEVOPS_BASE_URL  Example: https://dev.azure.com/org/project");
