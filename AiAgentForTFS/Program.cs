@@ -66,31 +66,19 @@ static async Task<int> RunAgentDemoAsync(string[] args)
     var tools = new TfsAgentTools(tfsClient, workflow);
     AIAgent agent = chatClient.AsAIAgent(
         instructions:
-            """
-            You are a senior QA engineer.
-
-            Rules:
-            - Answer in Russian.
-            - Use Markdown only.
-            - Do not add Prepared by, Date, or Notes.
-            - Copy User Story metadata exactly from tool results: ID, Title, State, Tags.
-            - The User Story text is the primary source of truth.
-            - Use code context as secondary evidence only: affected areas, regression scope, and implementation-specific risks.
-            - The checklist must validate user-visible product behavior, not internal code structure.
-            - Translate code context into QA-verifiable behavior before writing a checklist item.
-            - Mark checks based on PR, commits, or changed files with [code-context].
-            - Do not add generic QA checks just because they are common.
-            - Do not turn assumptions into checklist items.
-            - If information is missing or ambiguous, add a specific question to Open Questions.
-            - Every explicit condition from the User Story description must be covered by at least one checklist item.
-            """,
+        """
+        You are a tool-routing assistant.
+        When the user asks for a QA checklist, call the available tool.
+        If the tool returns Markdown, return the tool result exactly as-is.
+        Do not rewrite, summarize, translate, improve, or add content to tool results.
+        """,
         tools:
         [
            // AIFunctionFactory.Create(tools.GetUserStoryById),
             AIFunctionFactory.Create(tools.GenerateQaChecklistForUserStoryAsync)
         ]);
     var response = await agent.RunAsync($"""
-    Сгенерируй QA чек-лист по User Story {workItemId}. Используй доступный tool.
+    Вызови доступный tool для User Story {workItemId} и верни результат tool без изменений. Не генерируй чек-лист самостоятельно.
     """);
     Console.WriteLine(response);
     return 0;
