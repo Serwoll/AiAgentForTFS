@@ -35,6 +35,9 @@ public sealed class QaChecklistWorkflow
         """;
         var codeContext = BuildCodeContextSummary(workItem);
         finalMarkdown = await AddCodeContextRegressionAsync(finalMarkdown, codeContext);
+        Console.WriteLine("=== WORKFLOW RESULT ===");
+        Console.WriteLine(finalMarkdown);
+        Console.WriteLine("=== WORKFLOW RESULT END ===");
         return finalMarkdown;
     }
 
@@ -155,26 +158,24 @@ public sealed class QaChecklistWorkflow
             return checklist;
 
         AIAgent agent = _ollamaChatClient.AsAIAgent(instructions: """
-        You carefully update QA checklists. Preserve existing content unless explicitly asked to add regression checks.
-        If you add nothing, return only "NONE".
+        You generate only additional manual QA regression checklist items from code context.
+        Do not rewrite or summarize the existing checklist.
+        Do not return file paths, class names, method names, service names, PR names, or commit names as checklist items.
+        Convert code context into user-visible or QA-verifiable product behavior.
+        If there are no useful regression items, return only "NONE".
+        Each item must start with "[code-context]".
+        Never output raw code context entries.
         """);
 
         var response = await agent.RunAsync($"""
-        У тебя есть уже готовый QA checklist и code context.
-        Задача:
-        - НЕ переписывай чек-лист с нуля.
-        - НЕ меняй секции User Story, Context и Checklist.
-        - НЕ удаляй существующие пункты.
-        - Верни только дополнительные regression checklist items.
-        - Не возвращай полный чек-лист.
-        - Каждый пункт должен начинаться с "[code-context]".
-        - Если code context не дает понятных manual QA проверок, верни только "NONE".
-
         Existing checklist:
         {checklist}
 
         Code context:
         {codeContextSummary}
+
+        Return only additional regression checklist items.
+        Do not return the full checklist.
         """);
 
         var items = response.ToString().Trim();

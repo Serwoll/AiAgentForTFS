@@ -67,19 +67,17 @@ static async Task<int> RunAgentDemoAsync(string[] args)
     AIAgent agent = chatClient.AsAIAgent(
         instructions:
         """
-        You are a tool-routing assistant.
+        You are a tool router.
         When the user asks for a QA checklist, call the available tool.
-        If the tool returns Markdown, return the tool result exactly as-is.
-        Do not rewrite, summarize, translate, improve, or add content to tool results.
+        Return the tool result exactly as-is.
+        Do not rewrite, summarize, translate, improve, or add anything.
         """,
         tools:
         [
            // AIFunctionFactory.Create(tools.GetUserStoryById),
             AIFunctionFactory.Create(tools.GenerateQaChecklistForUserStoryAsync)
         ]);
-    var response = await agent.RunAsync($"""
-    Вызови доступный tool для User Story {workItemId} и верни результат tool без изменений. Не генерируй чек-лист самостоятельно.
-    """);
+    var response = await workflow.GenerateForUserStoryAsync(workItemId);
     Console.WriteLine(response);
     return 0;
 }
