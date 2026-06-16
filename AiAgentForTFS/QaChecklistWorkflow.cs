@@ -20,10 +20,22 @@ public sealed class QaChecklistWorkflow
     {
         var workItem = await _workItemClient.GetWorkItemAsync(workItemId);
         var conditions = await ExtractConditionsAsync(workItem);
-        var checklist = await GenerateChecklistAsync(workItem, conditions);
+        var body = await GenerateChecklistAsync(workItem, conditions);
+        var finalMarkdown =
+        $"""
+        # QA Checklist
+
+        ## User Story
+        - ID: {workItem.Id}
+        - Title: {workItem.Title}
+        - State: {workItem.State}
+        - Tags: {workItem.Tags}
+
+        {body}
+        """;
         var codeContext = BuildCodeContextSummary(workItem);
-        checklist = await AddCodeContextRegressionAsync(checklist, codeContext);
-        return checklist;
+        finalMarkdown = await AddCodeContextRegressionAsync(finalMarkdown, codeContext);
+        return finalMarkdown;
     }
 
     private async Task<string> ExtractConditionsAsync(WorkItemContext workItem)
@@ -49,7 +61,7 @@ public sealed class QaChecklistWorkflow
         return response.ToString();
     }
 
-    private async Task<string> GenerateChecklistAsync(WorkItemContext workItem, string condition)
+    private async Task<string> GenerateChecklistAsync(WorkItemContext workItem, string conditions)
     {
         AIAgent agent = _ollamaChatClient.AsAIAgent(instructions: """
         - Every extracted condition must be covered by at least one checklist item.
@@ -75,17 +87,9 @@ public sealed class QaChecklistWorkflow
         {workItem.Description}
 
         Extracted Conditions:
-        {condition}
+        {conditions}
 
         Структура чек-листа
-
-        # QA Checklist
-
-        ## User Story
-        - ID:
-        - Title:
-        - State:
-        - Tags:
 
         ## Checklist
         - [ ] ...
@@ -126,7 +130,7 @@ public sealed class QaChecklistWorkflow
                 }
                 build.AppendLine("</commit_messages>");
             }
-            build.AppendLine("<code_context_summary  usage=\"context_only\">");
+            build.AppendLine("<code_context_summary usage=\"context_only\">");
             build.AppendLine($"<changed_files_count>{source.ChangedFiles.Count}</changed_files_count>");
             build.AppendLine("<note>Code context is manual QA coverage evidence only. Convert it into user-visible behavior checks. Do not test files, classes, modules, or services directly.</note>");
 
@@ -152,7 +156,7 @@ public sealed class QaChecklistWorkflow
 
         AIAgent agent = _ollamaChatClient.AsAIAgent(instructions: """
         You carefully update QA checklists. Preserve existing content unless explicitly asked to add regression checks.
-        If you add nothing, return the existing checklist unchanged.
+        If you add nothing, return only "NONE".
         """);
 
         var response = await agent.RunAsync($"""
@@ -177,7 +181,6 @@ public sealed class QaChecklistWorkflow
         if (items == "NONE")
             return checklist;
 
-        else
-            return checklist + "\n\n## Code Context Regression\n" + items;
+        return checklist + "\n\n## Code Context Regression\n" + items;
     }
 }
