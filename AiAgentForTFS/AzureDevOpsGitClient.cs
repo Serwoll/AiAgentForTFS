@@ -80,39 +80,9 @@ public sealed class AzureDevOpsGitClient(HttpClient httpClient, AppConfig config
 
         var commitLimitReached = commits.Count > MaxCommits;
         var limitedCommits = commits.Take(MaxCommits).ToList();
-        var changedFiles = new List<string>();
-        var changedFileLimitReached = false;
-
-        foreach (var commit in limitedCommits)
-        {
-            if (string.IsNullOrWhiteSpace(commit.CommitId))
-            {
-                continue;
-            }
-
-            var changes = await GetCommitChangesAsync(pullRequestRef.RepositoryId, commit.CommitId, cancellationToken);
-
-            foreach (var changedFile in changes)
-            {
-                if (changedFiles.Contains(changedFile, StringComparer.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                changedFiles.Add(changedFile);
-
-                if (changedFiles.Count >= MaxChangedFiles)
-                {
-                    changedFileLimitReached = true;
-                    break;
-                }
-            }
-
-            if (changedFileLimitReached)
-            {
-                break;
-            }
-        }
+        var changedFiles = await GetPullRequestChangedFilesAsync(pullRequestRef, cancellationToken);
+        var changedFileLimitReached = changedFiles.Count > MaxChangedFiles;
+        var limitedChangedFiles = changedFiles.Take(MaxChangedFiles).ToList();
 
         return new CodeContextSource(
             "Pull Request",
@@ -122,22 +92,48 @@ public sealed class AzureDevOpsGitClient(HttpClient httpClient, AppConfig config
             NormalizeBranch(pullRequest.SourceRefName),
             NormalizeBranch(pullRequest.TargetRefName),
             limitedCommits.Select(commit => commit.Comment).Where(comment => !string.IsNullOrWhiteSpace(comment)).Cast<string>().ToList(),
-            changedFiles,
+            limitedChangedFiles,
             commitLimitReached,
             changedFileLimitReached);
     }
 
-    private async Task<IReadOnlyList<string>> GetCommitChangesAsync(string repositoryId, string commitId, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<string>> GetPullRequestChangedFilesAsync(PullRequestRef pullRequestRef, CancellationToken cancellationToken)
     {
-        var response = await GetJsonAsync<CommitChangesDto>(
-            $"{config.AzureDevOpsBaseUrl}/_apis/git/repositories/{repositoryId}/commits/{commitId}/changes?top={MaxChangedFiles}&api-version={Uri.EscapeDataString(config.AzureDevOpsApiVersion)}",
+        var iterations = await GetListAsync<PullRequestIterationDto>(
+            $"{config.AzureDevOpsBaseUrl}/_apis/git/repositories/{pullRequestRef.RepositoryId}/pullRequests/{pullRequestRef.PullRequestId}/iterations?api-version={Uri.EscapeDataString(config.AzureDevOpsApiVersion)}",
             cancellationToken);
 
-        return (response.Changes ?? [])
-            .Select(change => change.Item?.Path)
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Cast<string>()
-            .ToList();
+        if (iterations.Count == 0)
+        {
+            return [];
+        }
+
+        var latestIterationId = iterations.Max(iteration => iteration.Id);
+        var response = await GetJsonAsync<PullRequestIterationChangesDto>(
+            $"{config.AzureDevOpsBaseUrl}/_apis/git/repositories/{pullRequestRef.RepositoryId}/pullRequests/{pullRequestRef.PullRequestId}/iterations/{latestIterationId}/changes?$compareTo=0&api-version={Uri.EscapeDataString(config.AzureDevOpsApiVersion)}",
+            cancellationToken);
+
+        var changedFiles = new List<string>();
+
+        foreach (var change in response.ChangeEntries ?? [])
+        {
+            var path = change.Item?.Path;
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                path = change.OriginalPath;
+            }
+
+            if (string.IsNullOrWhiteSpace(path)
+                || changedFiles.Contains(path, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            changedFiles.Add(path);
+        }
+
+        return changedFiles;
     }
 
     private async Task<T> GetJsonAsync<T>(string url, CancellationToken cancellationToken)
@@ -219,11 +215,16 @@ public sealed class AzureDevOpsGitClient(HttpClient httpClient, AppConfig config
         string? CommitId,
         string? Comment);
 
-    private sealed record CommitChangesDto(
-        List<GitChangeDto>? Changes);
+    private sealed record PullRequestIterationDto(
+        int Id);
 
-    private sealed record GitChangeDto(
-        GitItemDto? Item);
+    private sealed record PullRequestIterationChangesDto(
+        List<PullRequestIterationChangeDto>? ChangeEntries);
+
+    private sealed record PullRequestIterationChangeDto(
+        GitItemDto? Item,
+        string? OriginalPath);
+
 
     private sealed record GitItemDto(
         string? Path);

@@ -1,0 +1,128 @@
+using System.ComponentModel;
+using System.Text;
+
+namespace AiAgentForTFS;
+
+public sealed class TfsAgentTools
+{
+    private const int MaxChangedFilesInToolResult = 15;
+
+    private readonly TfsWorkItemClient _tfsClient;
+    private readonly QaChecklistWorkflow _workflow;
+
+    public TfsAgentTools(TfsWorkItemClient tfsClient, QaChecklistWorkflow workflow)
+    {
+        _tfsClient = tfsClient;
+        _workflow = workflow;
+    }
+
+    [Description("Gets Azure DevOps/TFS User Story by work item id and returns title, description, acceptance criteria, links, Confluence requirement context, pull request context, commit messages, and changed files summary.")]
+    public async Task<string> GetUserStoryById([Description("Azure DevOps/TFS work item id of the User Story.")] int workItemId)
+    {
+        Console.WriteLine($"TOOL CALLED: GetUserStoryById({workItemId})");
+        var workItem = await _tfsClient.GetWorkItemAsync(workItemId);
+        var links = string.Join(Environment.NewLine, workItem.Links.Select(link => $"<link>{link.Name}-{link.Url}</link>"));
+        var codeContext = Build(workItem);
+        var confluenceContext = BuildConfluenceContext(workItem);
+
+        return
+        $"""
+        <tool_result purpose="qa_checklist_grounding_context">
+            <user_story>
+                <id>{workItem.Id}</id>
+                <title>{workItem.Title}</title>
+                <state>{workItem.State}</state>
+                <tags>{workItem.Tags}</tags>
+                <description>
+                    {workItem.Description}
+                </description>
+                <links>
+                    {links}
+                </links>
+            </user_story>
+
+            <confluence_context usage="requirements_context">
+                {confluenceContext}
+            </confluence_context>
+
+            <pull_request_context usage="context_only">
+                {codeContext}
+            </pull_request_context>
+        </tool_result>
+        """;
+    }
+
+    private static string Build(WorkItemContext workItem)
+    {
+        var build = new StringBuilder();
+        if (workItem.CodeContextSources.Count == 0)
+            return "No code context found";
+
+        foreach (var source in workItem.CodeContextSources)
+        {
+            build.AppendLine("<pr>");
+            build.AppendLine($"<id> {source.PullRequestId}</id>");
+            build.AppendLine($"<title> {source.Title}</title>");
+            build.AppendLine($"<branches> {source.SourceBranch} -> {source.TargetBranch}</branches>");
+            if (source.CommitMessages.Count == 0)
+            {
+                build.AppendLine("<commit_messages usage=\"context_only\">");
+                build.AppendLine("<none>No commits loaded</none>");
+                build.AppendLine("</commit_messages>");
+            }
+            else
+            {
+                build.AppendLine("<commit_messages usage=\"context_only\">");
+                foreach (var message in source.CommitMessages)
+                {
+                    build.AppendLine($"<message>{message}</message>");
+                }
+                build.AppendLine("</commit_messages>");
+            }
+            build.AppendLine("<code_context_summary  usage=\"context_only\">");
+            build.AppendLine($"<changed_files_count>{source.ChangedFiles.Count}</changed_files_count>");
+            build.AppendLine("<note>Code context is manual QA coverage evidence only. Convert it into user-visible behavior checks. Do not test files, classes, modules, or services directly.</note>");
+
+            foreach (var changedFile in source.ChangedFiles.Take(MaxChangedFilesInToolResult))
+            {
+                build.AppendLine($"<file>{changedFile}</file>");
+            }
+
+            if (source.ChangedFiles.Count > MaxChangedFilesInToolResult || source.ChangedFileLimitReached)
+            {
+                build.AppendLine("<truncated>true</truncated>");
+            }
+            build.AppendLine("</code_context_summary>");
+            build.AppendLine("</pr>");
+        }
+        return build.ToString();
+    }
+
+    private static string BuildConfluenceContext(WorkItemContext workItem)
+    {
+        var build = new StringBuilder();
+        if (workItem.ConfluenceContextSources.Count == 0)
+            return "No Confluence pages loaded";
+
+        foreach (var source in workItem.ConfluenceContextSources)
+        {
+            build.AppendLine("<confluence_page>");
+            build.AppendLine($"<id>{source.PageId}</id>");
+            build.AppendLine($"<title>{source.Title}</title>");
+            build.AppendLine($"<space>{source.SpaceKey}</space>");
+            build.AppendLine("<content>");
+            build.AppendLine(source.Content);
+            build.AppendLine("</content>");
+            build.AppendLine("</confluence_page>");
+        }
+
+        return build.ToString();
+    }
+
+    [Description("Generate Check list for User Story from US context")]
+    public async Task<string> GenerateQaChecklistForUserStoryAsync([Description("work item ID")] int workItemId)
+    {
+        var workflow = await _workflow.GenerateForUserStoryAsync(workItemId);
+        return workflow;
+    }
+}

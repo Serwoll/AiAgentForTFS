@@ -1,4 +1,4 @@
-using AiAgentForTFS;
+﻿using AiAgentForTFS;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using System.Diagnostics;
@@ -62,12 +62,26 @@ static async Task<int> RunGenerateQaChecklistAsync(string[] args)
 
     using var httpClient = CreateHttpClient();
     var gitClient = new AzureDevOpsGitClient(httpClient, config);
-    var tfsClient = new TfsWorkItemClient(httpClient, config, gitClient);
+    var confluenceClient = new ConfluenceClient(httpClient, config);
+    var tfsClient = new TfsWorkItemClient(httpClient, config, gitClient, confluenceClient);
+    var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
+    var workflow = new QaChecklistWorkflow(tfsClient, chatClient);
 
-    Console.WriteLine($"Fetching User Story {workItemId}...");
-    var workItem = await tfsClient.GetWorkItemAsync(workItemId);
+    Console.WriteLine($"Starting QA checklist workflow for User Story {workItemId}...");
+    var generationTimer = Stopwatch.StartNew();
+    var markdown = await workflow.GenerateForUserStoryAsync(workItemId);
+    generationTimer.Stop();
 
-    return await GenerateAndSaveAsync(workItem, config);
+    Directory.CreateDirectory("output");
+    var outputPath = Path.Combine("output", $"us-{workItemId}-qa-checklist.md");
+    await File.WriteAllTextAsync(outputPath, markdown);
+
+    Console.WriteLine();
+    Console.WriteLine(markdown);
+    Console.WriteLine($"Checklist generation time: {FormatElapsed(generationTimer.Elapsed)}");
+    Console.WriteLine($"Saved to: {Path.GetFullPath(outputPath)}");
+
+    return 0;
 }
 
 static async Task<int> RunChatAsync()
@@ -94,7 +108,9 @@ static async Task<int> RunChatAsync()
 
     using var httpClient = CreateHttpClient();
     var gitClient = new AzureDevOpsGitClient(httpClient, config);
+    var confluenceClient = new ConfluenceClient(httpClient, config);
     var enrichedWorkItem = await gitClient.EnrichAsync(workItem);
+    enrichedWorkItem = await confluenceClient.EnrichAsync(enrichedWorkItem);
 
     return await GenerateAndSaveAsync(enrichedWorkItem, config);
 }
@@ -153,6 +169,8 @@ static WorkItemContext CreateManualWorkItem(ManualUserStoryInput input)
         null,
         [],
         links,
+        [],
+        [],
         [],
         []);
 }
@@ -227,4 +245,8 @@ static void PrintUsage()
     Console.WriteLine("  AZURE_DEVOPS_API_VERSION optional, default: 7.0");
     Console.WriteLine("  OLLAMA_URL             optional, default: http://localhost:11434");
     Console.WriteLine("  OLLAMA_MODEL           optional, default: qwen3:8b");
+    Console.WriteLine("  CONFLUENCE_BASE_URL    optional, example: https://confluence.company.ru");
+    Console.WriteLine("  CONFLUENCE_TOKEN       optional, token/PAT for reading pages");
+    Console.WriteLine("  CONFLUENCE_AUTH_MODE   optional, Bearer or Basic, default: Bearer");
+    Console.WriteLine("  CONFLUENCE_USERNAME    required only when CONFLUENCE_AUTH_MODE=Basic");
 }
