@@ -16,13 +16,14 @@ public sealed class TfsAgentTools
         _workflow = workflow;
     }
 
-    [Description("Gets Azure DevOps/TFS User Story by work item id and returns title, description, acceptance criteria, links, pull request context, commit messages, and changed files summary.")]
+    [Description("Gets Azure DevOps/TFS User Story by work item id and returns title, description, acceptance criteria, links, Confluence requirement context, pull request context, commit messages, and changed files summary.")]
     public async Task<string> GetUserStoryById([Description("Azure DevOps/TFS work item id of the User Story.")] int workItemId)
     {
         Console.WriteLine($"TOOL CALLED: GetUserStoryById({workItemId})");
         var workItem = await _tfsClient.GetWorkItemAsync(workItemId);
         var links = string.Join(Environment.NewLine, workItem.Links.Select(link => $"<link>{link.Name}-{link.Url}</link>"));
         var codeContext = Build(workItem);
+        var confluenceContext = BuildConfluenceContext(workItem);
 
         return
         $"""
@@ -39,6 +40,10 @@ public sealed class TfsAgentTools
                     {links}
                 </links>
             </user_story>
+
+            <confluence_context usage="requirements_context">
+                {confluenceContext}
+            </confluence_context>
 
             <pull_request_context usage="context_only">
                 {codeContext}
@@ -90,6 +95,27 @@ public sealed class TfsAgentTools
             build.AppendLine("</code_context_summary>");
             build.AppendLine("</pr>");
         }
+        return build.ToString();
+    }
+
+    private static string BuildConfluenceContext(WorkItemContext workItem)
+    {
+        var build = new StringBuilder();
+        if (workItem.ConfluenceContextSources.Count == 0)
+            return "No Confluence pages loaded";
+
+        foreach (var source in workItem.ConfluenceContextSources)
+        {
+            build.AppendLine("<confluence_page>");
+            build.AppendLine($"<id>{source.PageId}</id>");
+            build.AppendLine($"<title>{source.Title}</title>");
+            build.AppendLine($"<space>{source.SpaceKey}</space>");
+            build.AppendLine("<content>");
+            build.AppendLine(source.Content);
+            build.AppendLine("</content>");
+            build.AppendLine("</confluence_page>");
+        }
+
         return build.ToString();
     }
 

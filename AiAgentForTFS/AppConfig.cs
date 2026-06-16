@@ -7,7 +7,11 @@ public sealed record AppConfig(
     string AzureDevOpsPat,
     string AzureDevOpsApiVersion,
     Uri OllamaUrl,
-    string OllamaModel)
+    string OllamaModel,
+    Uri? ConfluenceBaseUrl,
+    string? ConfluenceUsername,
+    string? ConfluenceToken,
+    string ConfluenceAuthMode)
 {
     public static AppConfig FromEnvironment()
     {
@@ -26,6 +30,15 @@ public sealed record AppConfig(
         var ollamaModel = Environment.GetEnvironmentVariable("OLLAMA_MODEL")
             ?? settings.Ollama?.Model
             ?? "qwen3:8b";
+        var confluenceBaseUrlText = Environment.GetEnvironmentVariable("CONFLUENCE_BASE_URL")
+            ?? settings.Confluence?.BaseUrl;
+        var confluenceUsername = Environment.GetEnvironmentVariable("CONFLUENCE_USERNAME")
+            ?? settings.Confluence?.Username;
+        var confluenceToken = Environment.GetEnvironmentVariable("CONFLUENCE_TOKEN")
+            ?? settings.Confluence?.Token;
+        var confluenceAuthMode = Environment.GetEnvironmentVariable("CONFLUENCE_AUTH_MODE")
+            ?? settings.Confluence?.AuthMode
+            ?? "Bearer";
 
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
@@ -47,7 +60,23 @@ public sealed record AppConfig(
             throw new ConfigurationException("Ollama:Url must be an absolute URL.");
         }
 
-        return new AppConfig(azureDevOpsBaseUrl.ToString().TrimEnd('/'), pat, apiVersion, ollamaUrl, ollamaModel);
+        Uri? confluenceBaseUrl = null;
+        if (!string.IsNullOrWhiteSpace(confluenceBaseUrlText)
+            && !Uri.TryCreate(confluenceBaseUrlText.TrimEnd('/'), UriKind.Absolute, out confluenceBaseUrl))
+        {
+            throw new ConfigurationException("Confluence:BaseUrl must be an absolute URL.");
+        }
+
+        return new AppConfig(
+            azureDevOpsBaseUrl.ToString().TrimEnd('/'),
+            pat,
+            apiVersion,
+            ollamaUrl,
+            ollamaModel,
+            confluenceBaseUrl,
+            string.IsNullOrWhiteSpace(confluenceUsername) ? null : confluenceUsername,
+            string.IsNullOrWhiteSpace(confluenceToken) ? null : confluenceToken,
+            confluenceAuthMode);
     }
 
     private static string? GetOptional(string primaryName, string fallbackName)
@@ -60,7 +89,8 @@ public sealed record AppConfig(
 
     private sealed record AppSettings(
         AzureDevOpsSettings? AzureDevOps,
-        OllamaSettings? Ollama)
+        OllamaSettings? Ollama,
+        ConfluenceSettings? Confluence)
     {
         public static AppSettings Load()
         {
@@ -68,12 +98,12 @@ public sealed record AppConfig(
 
             if (path is null)
             {
-                return new AppSettings(null, null);
+                return new AppSettings(null, null, null);
             }
 
             var json = File.ReadAllText(path);
             return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions.Default)
-                ?? new AppSettings(null, null);
+                ?? new AppSettings(null, null, null);
         }
 
         private static string? FindSettingsFile()
@@ -96,4 +126,10 @@ public sealed record AppConfig(
     private sealed record OllamaSettings(
         string? Url,
         string? Model);
+
+    private sealed record ConfluenceSettings(
+        string? BaseUrl,
+        string? Username,
+        string? Token,
+        string? AuthMode);
 }

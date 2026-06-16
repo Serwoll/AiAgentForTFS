@@ -76,6 +76,42 @@ public static class ChecklistPromptBuilder
         }
 
         prompt.AppendLine();
+        prompt.AppendLine("Confluence Context:");
+
+        if (workItem.ConfluenceContextSources.Count == 0)
+        {
+            prompt.AppendLine("No Confluence pages were loaded.");
+        }
+        else
+        {
+            foreach (var source in workItem.ConfluenceContextSources)
+            {
+                prompt.AppendLine($"## Confluence page {source.PageId}");
+                prompt.AppendLine($"Title: {source.Title ?? "Unknown"}");
+                prompt.AppendLine($"Space: {source.SpaceKey ?? "Unknown"}");
+                prompt.AppendLine(source.Content);
+
+                if (source.ContentTruncated)
+                {
+                    prompt.AppendLine("Warning: Confluence page content was truncated.");
+                }
+
+                prompt.AppendLine();
+            }
+        }
+
+        if (workItem.ConfluenceContextWarnings.Count > 0)
+        {
+            prompt.AppendLine("Confluence Context Warnings:");
+            foreach (var warning in workItem.ConfluenceContextWarnings)
+            {
+                prompt.AppendLine($"- {warning}");
+            }
+
+            prompt.AppendLine();
+        }
+
+        prompt.AppendLine();
         prompt.AppendLine("Pull Request Context:");
 
         if (workItem.CodeContextSources.Count == 0)
@@ -232,6 +268,23 @@ public static class ChecklistPromptBuilder
         audit.AppendLine("### Other context sources");
         audit.AppendLine($"- Description: {(string.IsNullOrWhiteSpace(workItem.Description) ? "missing" : "used")}");
         audit.AppendLine($"- Acceptance Criteria: {(string.IsNullOrWhiteSpace(workItem.AcceptanceCriteria) ? "missing" : "used")}");
+
+        if (workItem.ConfluenceContextSources.Count == 0)
+        {
+            audit.AppendLine("- Confluence: no pages loaded");
+        }
+        else
+        {
+            foreach (var source in workItem.ConfluenceContextSources)
+            {
+                audit.AppendLine($"- Confluence page: `{source.PageId}` - {source.Title ?? "Untitled"}");
+            }
+        }
+
+        foreach (var warning in workItem.ConfluenceContextWarnings)
+        {
+            audit.AppendLine($"- Confluence warning: {warning}");
+        }
 
         foreach (var field in otherFields)
         {

@@ -11,6 +11,8 @@ public sealed record WorkItemContext(
     string? Tags,
     IReadOnlyList<WorkItemTextField> TextFields,
     IReadOnlyList<WorkItemLink> Links,
+    IReadOnlyList<ConfluenceContextSource> ConfluenceContextSources,
+    IReadOnlyList<string> ConfluenceContextWarnings,
     IReadOnlyList<CodeContextSource> CodeContextSources,
     IReadOnlyList<string> CodeContextWarnings);
 
@@ -37,6 +39,14 @@ public sealed record CodeContextSource(
     IReadOnlyList<string> ChangedFiles,
     bool CommitLimitReached,
     bool ChangedFileLimitReached);
+
+public sealed record ConfluenceContextSource(
+    string PageId,
+    string Url,
+    string? Title,
+    string? SpaceKey,
+    string Content,
+    bool ContentTruncated);
 
 public sealed record ManualUserStoryInput(
     string Text,

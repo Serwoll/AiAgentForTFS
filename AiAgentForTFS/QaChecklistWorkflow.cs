@@ -48,9 +48,10 @@ public sealed class QaChecklistWorkflow
     private async Task<string> ExtractConditionsAsync(WorkItemContext workItem)
     {
         AIAgent agent = _ollamaChatClient.AsAIAgent(instructions: "You extract explicit requirements from User Stories. Return only facts from the provided text.");
+        var confluenceContext = BuildConfluenceContextSummary(workItem);
         var response = await agent.RunAsync($"""
         Извлеки только явные условия из User Story.
-        Условие должно быть явно написано в Title, Description или Acceptance Criteria.
+        Условие должно быть явно написано в Title, Description, Acceptance Criteria или Confluence Context.
         Формат каждого пункта: "- триггер/настройка/состояние -> ожидаемое поведение".
         Не добавляй предположения.
         Не используй code context.
@@ -64,6 +65,9 @@ public sealed class QaChecklistWorkflow
 
         Acceptance Criteria:
         {workItem.AcceptanceCriteria ?? "Not provided."}
+
+        Confluence Context:
+        {confluenceContext}
         """);
         return response.ToString();
     }
@@ -153,6 +157,46 @@ public sealed class QaChecklistWorkflow
             build.AppendLine("</code_context_summary>");
             build.AppendLine("</pr>");
         }
+        return build.ToString();
+    }
+
+    private static string BuildConfluenceContextSummary(WorkItemContext workItem)
+    {
+        var build = new StringBuilder();
+
+        if (workItem.ConfluenceContextSources.Count == 0)
+        {
+            build.AppendLine("No Confluence pages loaded.");
+        }
+
+        foreach (var source in workItem.ConfluenceContextSources)
+        {
+            build.AppendLine("<confluence_page>");
+            build.AppendLine($"<id>{source.PageId}</id>");
+            build.AppendLine($"<title>{source.Title}</title>");
+            build.AppendLine($"<space>{source.SpaceKey}</space>");
+            build.AppendLine("<content>");
+            build.AppendLine(source.Content);
+            build.AppendLine("</content>");
+
+            if (source.ContentTruncated)
+            {
+                build.AppendLine("<truncated>true</truncated>");
+            }
+
+            build.AppendLine("</confluence_page>");
+        }
+
+        if (workItem.ConfluenceContextWarnings.Count > 0)
+        {
+            build.AppendLine("<confluence_warnings>");
+            foreach (var warning in workItem.ConfluenceContextWarnings)
+            {
+                build.AppendLine($"<warning>{warning}</warning>");
+            }
+            build.AppendLine("</confluence_warnings>");
+        }
+
         return build.ToString();
     }
 

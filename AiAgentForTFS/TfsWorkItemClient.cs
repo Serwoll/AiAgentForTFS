@@ -6,7 +6,11 @@ using System.Text.RegularExpressions;
 
 namespace AiAgentForTFS;
 
-public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config, AzureDevOpsGitClient? gitClient = null)
+public sealed class TfsWorkItemClient(
+    HttpClient httpClient,
+    AppConfig config,
+    AzureDevOpsGitClient? gitClient = null,
+    ConfluenceClient? confluenceClient = null)
 {
     public async Task<WorkItemContext> GetWorkItemAsync(int workItemId, CancellationToken cancellationToken = default)
     {
@@ -38,11 +42,21 @@ public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config, A
             ExtractTextFields(fields),
             (workItem.Relations ?? []).Select(ToWorkItemLink).ToList(),
             [],
+            [],
+            [],
             []);
 
-        return gitClient is null
-            ? context
-            : await gitClient.EnrichAsync(context, cancellationToken);
+        if (gitClient is not null)
+        {
+            context = await gitClient.EnrichAsync(context, cancellationToken);
+        }
+
+        if (confluenceClient is not null)
+        {
+            context = await confluenceClient.EnrichAsync(context, cancellationToken);
+        }
+
+        return context;
     }
 
     private string BuildWorkItemUrl(int workItemId)
@@ -95,7 +109,12 @@ public sealed class TfsWorkItemClient(HttpClient httpClient, AppConfig config, A
             return null;
         }
 
-        var withLineBreaks = Regex.Replace(value, "<\\s*br\\s*/?>|</\\s*p\\s*>|</\\s*div\\s*>", "\n", RegexOptions.IgnoreCase);
+        var withLinks = Regex.Replace(
+            value,
+            "<a\\s+[^>]*href=[\"'](?<url>[^\"']+)[\"'][^>]*>(?<text>.*?)</a>",
+            match => $"{match.Groups["text"].Value} ({match.Groups["url"].Value})",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var withLineBreaks = Regex.Replace(withLinks, "<\\s*br\\s*/?>|</\\s*p\\s*>|</\\s*div\\s*>", "\n", RegexOptions.IgnoreCase);
         var withoutTags = Regex.Replace(withLineBreaks, "<.*?>", string.Empty);
         var decoded = WebUtility.HtmlDecode(withoutTags);
 
