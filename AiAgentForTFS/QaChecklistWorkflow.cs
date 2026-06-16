@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
@@ -5,6 +6,7 @@ namespace AiAgentForTFS;
 
 public sealed class QaChecklistWorkflow
 {
+    private const int MaxChangedFilesInToolResult = 15;
     private readonly TfsWorkItemClient _workItemClient;
     private readonly OllamaChatClient _ollamaChatClient;
 
@@ -17,9 +19,10 @@ public sealed class QaChecklistWorkflow
     public async Task<string> GenerateForUserStoryAsync(int workItemId)
     {
         var workItem = await _workItemClient.GetWorkItemAsync(workItemId);
-        var condition = await ExtractConditionsAsync(workItem);
-        var checklist = await GenerateChecklistAsync(workItem, condition);
-        Console.WriteLine(checklist);
+        var conditions = await ExtractConditionsAsync(workItem);
+        var checklist = await GenerateChecklistAsync(workItem, conditions);
+        var codeContext = BuildCodeContextSummary(workItem);
+        checklist = await AddCodeContextRegressionAsync(checklist, codeContext);
         return checklist;
     }
 
@@ -93,6 +96,86 @@ public sealed class QaChecklistWorkflow
         ## Open Questions
         - ...
         """);
+        return response.ToString();
+    }
+
+    private static string BuildCodeContextSummary(WorkItemContext workItem)
+    {
+        var build = new StringBuilder();
+        if (workItem.CodeContextSources.Count == 0)
+            return "No code context found";
+
+        foreach (var source in workItem.CodeContextSources)
+        {
+            build.AppendLine("<pr>");
+            build.AppendLine($"<id> {source.PullRequestId}</id>");
+            build.AppendLine($"<title> {source.Title}</title>");
+            build.AppendLine($"<branches> {source.SourceBranch} -> {source.TargetBranch}</branches>");
+            if (source.CommitMessages.Count == 0)
+            {
+                build.AppendLine("<commit_messages usage=\"context_only\">");
+                build.AppendLine("<none>No commits loaded</none>");
+                build.AppendLine("</commit_messages>");
+            }
+            else
+            {
+                build.AppendLine("<commit_messages usage=\"context_only\">");
+                foreach (var message in source.CommitMessages)
+                {
+                    build.AppendLine($"<message>{message}</message>");
+                }
+                build.AppendLine("</commit_messages>");
+            }
+            build.AppendLine("<code_context_summary  usage=\"context_only\">");
+            build.AppendLine($"<changed_files_count>{source.ChangedFiles.Count}</changed_files_count>");
+            build.AppendLine("<note>Code context is manual QA coverage evidence only. Convert it into user-visible behavior checks. Do not test files, classes, modules, or services directly.</note>");
+
+            foreach (var changedFile in source.ChangedFiles.Take(MaxChangedFilesInToolResult))
+            {
+                build.AppendLine($"<file>{changedFile}</file>");
+            }
+
+            if (source.ChangedFiles.Count > MaxChangedFilesInToolResult || source.ChangedFileLimitReached)
+            {
+                build.AppendLine("<truncated>true</truncated>");
+            }
+            build.AppendLine("</code_context_summary>");
+            build.AppendLine("</pr>");
+        }
+        return build.ToString();
+    }
+
+    private async Task<string> AddCodeContextRegressionAsync(string checklist, string codeContextSummary)
+    {
+        if (codeContextSummary == "No code context found")
+            return checklist;
+
+        AIAgent agent = _ollamaChatClient.AsAIAgent(instructions: """
+        You carefully update QA checklists. Preserve existing content unless explicitly asked to add regression checks.
+        If you add nothing, return the existing checklist unchanged.
+        """);
+
+        var response = await agent.RunAsync($"""
+        У тебя есть уже готовый QA checklist и code context.
+        Задача:
+        - НЕ переписывай чек-лист с нуля.
+        - НЕ меняй секции User Story, Context и Checklist.
+        - НЕ удаляй существующие пункты.
+        - Используй code context только для добавления manual QA regression checks.
+        - Добавляй новые пункты только в секцию Regression.
+        - Каждый новый пункт из code context начинай с [code-context].
+        - Формулируй проверки как поведение продукта или проверяемый manual QA сценарий.
+        - Не проверяй файлы, классы, методы, сервисы, PR или commits напрямую.
+        - Если code context не даёт понятного manual QA сценария, ничего не добавляй.
+        - Верни полный Markdown чек-лист целиком.
+
+        Existing checklist:
+        {checklist}
+
+        Code context:
+        {codeContextSummary}
+        """);
+
         return response.ToString();
     }
 }
