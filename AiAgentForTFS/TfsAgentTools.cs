@@ -19,7 +19,7 @@ public sealed class TfsAgentTools
     [Description("Gets Azure DevOps/TFS User Story by work item id and returns title, description, acceptance criteria, links, Confluence requirement context, pull request context, commit messages, and changed files summary.")]
     public async Task<string> GetUserStoryById([Description("Azure DevOps/TFS work item id of the User Story.")] int workItemId)
     {
-        Console.WriteLine($"TOOL CALLED: GetUserStoryById({workItemId})");
+        Console.WriteLine($"Вызван tool: GetUserStoryById({workItemId})");
         var workItem = await _tfsClient.GetWorkItemAsync(workItemId);
         var links = string.Join(Environment.NewLine, workItem.Links.Select(link => $"<link>{link.Name}-{link.Url}</link>"));
         var codeContext = Build(workItem);
@@ -122,7 +122,7 @@ public sealed class TfsAgentTools
     [Description("Generate Check list for User Story from US context")]
     public async Task<string> GenerateQaChecklistForUserStoryAsync([Description("work item ID")] int workItemId)
     {
-        var workflow = await _workflow.GenerateForUserStoryAsync(workItemId);
-        return workflow;
+        var result = await _workflow.GenerateForUserStoryAsync(workItemId);
+        return result.Markdown;
     }
 }

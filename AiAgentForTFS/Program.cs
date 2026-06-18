@@ -18,28 +18,29 @@ static async Task<int> RunAsync(string[] args)
         return args[0].ToLowerInvariant() switch
         {
             "generate-qa-checklist" => await RunGenerateQaChecklistAsync(args),
+            "generate-qa-checklist-from-confluence" => await RunGenerateQaChecklistFromConfluenceAsync(args),
             "chat" => await RunChatAsync(),
             _ => PrintUsageAndReturn()
         };
     }
     catch (ConfigurationException ex)
     {
-        Console.Error.WriteLine($"Configuration error: {ex.Message}");
+        Console.Error.WriteLine($"Ошибка конфигурации: {ex.Message}");
         return 2;
     }
     catch (AgentException ex)
     {
-        Console.Error.WriteLine($"Agent error: {ex.Message}");
+        Console.Error.WriteLine($"Ошибка агента: {ex.Message}");
         return 3;
     }
     catch (HttpRequestException ex)
     {
-        Console.Error.WriteLine($"Network error: {ex.Message}");
+        Console.Error.WriteLine($"Ошибка сети: {ex.Message}");
         return 4;
     }
     catch (TaskCanceledException)
     {
-        Console.Error.WriteLine("Request timed out. Check Azure DevOps/TFS and Ollama availability.");
+        Console.Error.WriteLine("Запрос превысил время ожидания. Проверь доступность Azure DevOps/TFS, Confluence и Ollama.");
         return 5;
     }
 }
@@ -54,7 +55,7 @@ static async Task<int> RunGenerateQaChecklistAsync(string[] args)
 
     if (!int.TryParse(args[1], out var workItemId) || workItemId <= 0)
     {
-        Console.Error.WriteLine("Work item id must be a positive number.");
+        Console.Error.WriteLine("ID work item должен быть положительным числом.");
         return 1;
     }
 
@@ -65,21 +66,48 @@ static async Task<int> RunGenerateQaChecklistAsync(string[] args)
     var confluenceClient = new ConfluenceClient(httpClient, config);
     var tfsClient = new TfsWorkItemClient(httpClient, config, gitClient, confluenceClient);
     var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
-    var workflow = new QaChecklistWorkflow(tfsClient, chatClient);
+    var workflow = new QaChecklistWorkflow(tfsClient, chatClient, confluenceClient);
 
-    Console.WriteLine($"Starting QA checklist workflow for User Story {workItemId}...");
+    Console.WriteLine($"Запускаю генерацию QA чек-листа для User Story {workItemId}...");
     var generationTimer = Stopwatch.StartNew();
-    var markdown = await workflow.GenerateForUserStoryAsync(workItemId);
+    var result = await workflow.GenerateForUserStoryAsync(workItemId);
     generationTimer.Stop();
 
-    Directory.CreateDirectory("output");
-    var outputPath = Path.Combine("output", $"us-{workItemId}-qa-checklist.md");
-    await File.WriteAllTextAsync(outputPath, markdown);
+    PrintWorkflowResult(result, generationTimer.Elapsed);
 
-    Console.WriteLine();
-    Console.WriteLine(markdown);
-    Console.WriteLine($"Checklist generation time: {FormatElapsed(generationTimer.Elapsed)}");
-    Console.WriteLine($"Saved to: {Path.GetFullPath(outputPath)}");
+    return 0;
+}
+
+static async Task<int> RunGenerateQaChecklistFromConfluenceAsync(string[] args)
+{
+    if (args.Length != 2)
+    {
+        PrintUsage();
+        return 1;
+    }
+
+    var url = args[1];
+    if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+    {
+        Console.Error.WriteLine("Ссылка на Confluence должна быть абсолютным URL.");
+        return 1;
+    }
+
+    var config = AppConfig.FromEnvironment();
+
+    using var httpClient = CreateHttpClient();
+    var gitClient = new AzureDevOpsGitClient(httpClient, config);
+    var confluenceClient = new ConfluenceClient(httpClient, config);
+    var tfsClient = new TfsWorkItemClient(httpClient, config, gitClient, confluenceClient);
+    var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
+    var workflow = new QaChecklistWorkflow(tfsClient, chatClient, confluenceClient);
+
+    Console.WriteLine("Запускаю генерацию QA чек-листа по странице Confluence...");
+    var generationTimer = Stopwatch.StartNew();
+    var result = await workflow.GenerateForConfluenceUrlAsync(url);
+    generationTimer.Stop();
+
+    PrintWorkflowResult(result, generationTimer.Elapsed);
 
     return 0;
 }
@@ -88,17 +116,17 @@ static async Task<int> RunChatAsync()
 {
     var config = AppConfig.FromEnvironment();
 
-    Console.WriteLine("Paste User Story text. Finish with a line containing only `done`.");
+    Console.WriteLine("Вставь текст User Story. Заверши ввод строкой `done`.");
     var userStoryText = ReadMultilineInput();
 
     if (string.IsNullOrWhiteSpace(userStoryText))
     {
-        Console.Error.WriteLine("User Story text is empty.");
+        Console.Error.WriteLine("Текст User Story пустой.");
         return 1;
     }
 
     Console.WriteLine();
-    Console.WriteLine("Paste optional PR/commit/code links or notes. Finish with `done`.");
+    Console.WriteLine("Вставь дополнительные PR/commit/code/Confluence ссылки или заметки. Заверши ввод строкой `done`.");
     var linkText = ReadMultilineInput();
     var manualInput = new ManualUserStoryInput(
         userStoryText,
@@ -123,7 +151,7 @@ static async Task<int> GenerateAndSaveAsync(WorkItemContext workItem, AppConfig 
 
     var prompt = ChecklistPromptBuilder.Build(workItem);
 
-    Console.WriteLine("Generating QA checklist...");
+    Console.WriteLine("Генерирую QA чек-лист...");
     var responseTimer = Stopwatch.StartNew();
     var response = await agent.RunAsync(prompt);
     responseTimer.Stop();
@@ -139,10 +167,18 @@ static async Task<int> GenerateAndSaveAsync(WorkItemContext workItem, AppConfig 
 
     Console.WriteLine();
     Console.WriteLine(markdown);
-    Console.WriteLine($"Response time: {FormatElapsed(responseTimer.Elapsed)}");
-    Console.WriteLine($"Saved to: {Path.GetFullPath(outputPath)}");
+    Console.WriteLine($"Время ответа LLM: {FormatElapsed(responseTimer.Elapsed)}");
+    Console.WriteLine($"Сохранено в: {Path.GetFullPath(outputPath)}");
 
     return 0;
+}
+
+static void PrintWorkflowResult(QaChecklistWorkflowResult result, TimeSpan elapsed)
+{
+    Console.WriteLine();
+    Console.WriteLine(result.Markdown);
+    Console.WriteLine($"Время генерации чек-листа: {FormatElapsed(elapsed)}");
+    Console.WriteLine($"Сохранено в: {result.OutputPath}");
 }
 
 static string FormatElapsed(TimeSpan elapsed)
@@ -235,18 +271,19 @@ static int PrintUsageAndReturn()
 
 static void PrintUsage()
 {
-    Console.WriteLine("Usage:");
+    Console.WriteLine("Использование:");
     Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- generate-qa-checklist <workItemId>");
+    Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- generate-qa-checklist-from-confluence <url>");
     Console.WriteLine("  dotnet run --project .\\AiAgentForTFS\\AiAgentForTFS.csproj -- chat");
     Console.WriteLine();
-    Console.WriteLine("Environment variables:");
-    Console.WriteLine("  AZURE_DEVOPS_BASE_URL  Example: https://dev.azure.com/org/project");
-    Console.WriteLine("  AZURE_DEVOPS_PAT       Personal Access Token with Work Items read access");
-    Console.WriteLine("  AZURE_DEVOPS_API_VERSION optional, default: 7.0");
-    Console.WriteLine("  OLLAMA_URL             optional, default: http://localhost:11434");
-    Console.WriteLine("  OLLAMA_MODEL           optional, default: qwen3:8b");
-    Console.WriteLine("  CONFLUENCE_BASE_URL    optional, example: https://confluence.company.ru");
-    Console.WriteLine("  CONFLUENCE_TOKEN       optional, token/PAT for reading pages");
-    Console.WriteLine("  CONFLUENCE_AUTH_MODE   optional, Bearer or Basic, default: Bearer");
-    Console.WriteLine("  CONFLUENCE_USERNAME    required only when CONFLUENCE_AUTH_MODE=Basic");
+    Console.WriteLine("Переменные окружения:");
+    Console.WriteLine("  AZURE_DEVOPS_BASE_URL  пример: https://dev.azure.com/org/project");
+    Console.WriteLine("  AZURE_DEVOPS_PAT       Personal Access Token с доступом на чтение Work Items");
+    Console.WriteLine("  AZURE_DEVOPS_API_VERSION опционально, по умолчанию: 7.0");
+    Console.WriteLine("  OLLAMA_URL             опционально, по умолчанию: http://localhost:11434");
+    Console.WriteLine("  OLLAMA_MODEL           опционально, по умолчанию: qwen3:8b");
+    Console.WriteLine("  CONFLUENCE_BASE_URL    опционально, пример: https://confluence.company.ru");
+    Console.WriteLine("  CONFLUENCE_TOKEN       опционально, token/PAT для чтения страниц");
+    Console.WriteLine("  CONFLUENCE_AUTH_MODE   опционально, Bearer или Basic, по умолчанию: Bearer");
+    Console.WriteLine("  CONFLUENCE_USERNAME    нужен только при CONFLUENCE_AUTH_MODE=Basic");
 }

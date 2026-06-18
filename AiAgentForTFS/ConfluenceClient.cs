@@ -46,7 +46,7 @@ public sealed class ConfluenceClient(HttpClient httpClient, AppConfig config)
             }
             catch (Exception ex) when (ex is HttpRequestException or JsonException or AgentException)
             {
-                warnings.Add($"Confluence page {pageRef.PageId} was not loaded: {ex.Message}");
+                warnings.Add($"Страница Confluence {pageRef.PageId} не была загружена: {ex.Message}");
             }
         }
 
@@ -67,11 +67,11 @@ public sealed class ConfluenceClient(HttpClient httpClient, AppConfig config)
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new AgentException($"Confluence returned {(int)response.StatusCode} {response.ReasonPhrase}: {TrimError(body)}");
+            throw new AgentException($"Confluence вернул {(int)response.StatusCode} {response.ReasonPhrase}: {TrimError(body)}");
         }
 
         var dto = JsonSerializer.Deserialize<ConfluenceContentDto>(body, JsonOptions.Default)
-            ?? throw new AgentException("Confluence returned an invalid page response.");
+            ?? throw new AgentException("Confluence вернул некорректный ответ по странице.");
 
         var content = CleanHtml(dto.Body?.Storage?.Value);
         var truncated = content.Length > MaxContentLength;
@@ -97,7 +97,7 @@ public sealed class ConfluenceClient(HttpClient httpClient, AppConfig config)
         {
             if (string.IsNullOrWhiteSpace(config.ConfluenceUsername))
             {
-                throw new AgentException("Confluence:Username is required when Confluence:AuthMode is Basic.");
+                throw new AgentException("Confluence:Username обязателен, если Confluence:AuthMode = Basic.");
             }
 
             var token = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{config.ConfluenceUsername}:{config.ConfluenceToken}"));
@@ -190,6 +190,20 @@ public sealed class ConfluenceClient(HttpClient httpClient, AppConfig config)
         }
 
         return body.Length <= 500 ? body : body[..500] + "...";
+    }
+
+    public async Task<ConfluenceContextSource> GetPageByUrlAsync(string url, CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured)
+            throw new AgentException("Confluence не настроен. Заполни Confluence:BaseUrl и Confluence:Token.");
+
+        if (!LooksLikeConfiguredConfluenceUrl(url))
+            throw new AgentException("URL не относится к настроенному Confluence.");
+
+        var pageId = ExtractPageId(url) ?? throw new AgentException("В URL не найден pageId страницы Confluence.");
+
+        var pageRef = new ConfluencePageReference(pageId, url);
+        return await GetPageAsync(pageRef, cancellationToken);
     }
 
     private sealed record ConfluencePageReference(string PageId, string Url);

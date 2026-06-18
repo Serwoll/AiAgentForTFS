@@ -28,7 +28,7 @@ public sealed class AzureDevOpsGitClient(HttpClient httpClient, AppConfig config
             }
             catch (Exception ex) when (ex is HttpRequestException or JsonException or AgentException)
             {
-                warnings.Add($"Could not enrich PR {pullRequestRef.PullRequestId} in repository {pullRequestRef.RepositoryId}: {ex.Message}");
+                warnings.Add($"Не удалось обогатить контекст по PR {pullRequestRef.PullRequestId} в репозитории {pullRequestRef.RepositoryId}: {ex.Message}");
             }
         }
 
@@ -146,11 +146,11 @@ public sealed class AzureDevOpsGitClient(HttpClient httpClient, AppConfig config
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new AgentException($"Azure DevOps Git returned {(int)response.StatusCode} {response.ReasonPhrase}: {TrimError(body)}");
+            throw new AgentException($"Azure DevOps Git вернул {(int)response.StatusCode} {response.ReasonPhrase}: {TrimError(body)}");
         }
 
         return JsonSerializer.Deserialize<T>(body, JsonOptions.Default)
-            ?? throw new AgentException("Azure DevOps Git returned an invalid JSON response.");
+            ?? throw new AgentException("Azure DevOps Git вернул некорректный JSON.");
     }
 
     private async Task<List<T>> GetListAsync<T>(string url, CancellationToken cancellationToken)
@@ -163,7 +163,7 @@ public sealed class AzureDevOpsGitClient(HttpClient httpClient, AppConfig config
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new AgentException($"Azure DevOps Git returned {(int)response.StatusCode} {response.ReasonPhrase}: {TrimError(body)}");
+            throw new AgentException($"Azure DevOps Git вернул {(int)response.StatusCode} {response.ReasonPhrase}: {TrimError(body)}");
         }
 
         using var document = JsonDocument.Parse(body);

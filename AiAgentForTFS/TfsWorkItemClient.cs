@@ -22,11 +22,11 @@ public sealed class TfsWorkItemClient(
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new AgentException($"Azure DevOps/TFS returned {(int)response.StatusCode} {response.ReasonPhrase}: {TrimError(body)}");
+            throw new AgentException($"Azure DevOps/TFS вернул {(int)response.StatusCode} {response.ReasonPhrase}: {TrimError(body)}");
         }
 
         var workItem = JsonSerializer.Deserialize<TfsWorkItemDto>(body, JsonOptions.Default)
-            ?? throw new AgentException("Azure DevOps/TFS returned an invalid work item response.");
+            ?? throw new AgentException("Azure DevOps/TFS вернул некорректный ответ по work item.");
 
         var fields = workItem.Fields ?? [];
 

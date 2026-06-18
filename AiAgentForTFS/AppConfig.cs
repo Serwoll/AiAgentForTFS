@@ -42,29 +42,29 @@ public sealed record AppConfig(
 
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            throw new ConfigurationException("AzureDevOps:BaseUrl is required in appsettings.json or AZURE_DEVOPS_BASE_URL.");
+            throw new ConfigurationException("Не задан AzureDevOps:BaseUrl в appsettings.json или AZURE_DEVOPS_BASE_URL.");
         }
 
         if (string.IsNullOrWhiteSpace(pat))
         {
-            throw new ConfigurationException("AzureDevOps:Pat is required in appsettings.json or AZURE_DEVOPS_PAT.");
+            throw new ConfigurationException("Не задан AzureDevOps:Pat в appsettings.json или AZURE_DEVOPS_PAT.");
         }
 
         if (!Uri.TryCreate(baseUrl.TrimEnd('/'), UriKind.Absolute, out var azureDevOpsBaseUrl))
         {
-            throw new ConfigurationException("AzureDevOps:BaseUrl must be an absolute URL.");
+            throw new ConfigurationException("AzureDevOps:BaseUrl должен быть абсолютным URL.");
         }
 
         if (!Uri.TryCreate(ollamaUrlText.TrimEnd('/'), UriKind.Absolute, out var ollamaUrl))
         {
-            throw new ConfigurationException("Ollama:Url must be an absolute URL.");
+            throw new ConfigurationException("Ollama:Url должен быть абсолютным URL.");
         }
 
         Uri? confluenceBaseUrl = null;
         if (!string.IsNullOrWhiteSpace(confluenceBaseUrlText)
             && !Uri.TryCreate(confluenceBaseUrlText.TrimEnd('/'), UriKind.Absolute, out confluenceBaseUrl))
         {
-            throw new ConfigurationException("Confluence:BaseUrl must be an absolute URL.");
+            throw new ConfigurationException("Confluence:BaseUrl должен быть абсолютным URL.");
         }
 
         return new AppConfig(

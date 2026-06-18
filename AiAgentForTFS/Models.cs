@@ -51,3 +51,7 @@ public sealed record ConfluenceContextSource(
 public sealed record ManualUserStoryInput(
     string Text,
     IReadOnlyList<string> Links);
+
+public sealed record QaChecklistWorkflowResult(
+    string Markdown,
+    string OutputPath);

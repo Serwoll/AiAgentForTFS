@@ -9,22 +9,52 @@ public sealed class QaChecklistWorkflow
     private const int MaxChangedFilesInToolResult = 15;
     private readonly TfsWorkItemClient _workItemClient;
     private readonly OllamaChatClient _ollamaChatClient;
+    private readonly ConfluenceClient _confluenceClient;
 
-    public QaChecklistWorkflow(TfsWorkItemClient workItemClient, OllamaChatClient ollamaChatClient)
+    public QaChecklistWorkflow(TfsWorkItemClient workItemClient, OllamaChatClient ollamaChatClient, ConfluenceClient confluenceClient)
     {
         _workItemClient = workItemClient;
         _ollamaChatClient = ollamaChatClient;
+        _confluenceClient = confluenceClient;
     }
 
-    public async Task<string> GenerateForUserStoryAsync(int workItemId)
+    public async Task<QaChecklistWorkflowResult> GenerateForUserStoryAsync(int workItemId)
     {
-        Console.WriteLine("Fetching User Story and linked PR context...");
+        Console.WriteLine("Загружаю User Story и связанный PR-контекст...");
         var workItem = await _workItemClient.GetWorkItemAsync(workItemId);
 
-        Console.WriteLine("Extracting explicit User Story conditions...");
+        return await GenerateForWorkItemContextAsync(workItem, Path.Combine("output", $"us-{workItemId}-qa-checklist.md"));
+    }
+
+    public async Task<QaChecklistWorkflowResult> GenerateForConfluenceUrlAsync(string url)
+    {
+        Console.WriteLine("Загружаю страницу Confluence...");
+        var confluencePage = await _confluenceClient.GetPageByUrlAsync(url);
+        var workItem = new WorkItemContext(
+            0,
+            confluencePage.Title ?? "Confluence Page",
+            "Confluence Page",
+            "Manual",
+            null,
+            confluencePage.Content,
+            null,
+            "Confluence",
+            [],
+            [],
+            [confluencePage],
+            [],
+            [],
+            []);
+
+        return await GenerateForWorkItemContextAsync(workItem, Path.Combine("output", $"confluence-{confluencePage.PageId}-qa-checklist.md"));
+    }
+
+    private async Task<QaChecklistWorkflowResult> GenerateForWorkItemContextAsync(WorkItemContext workItem, string outputPath)
+    {
+        Console.WriteLine("Извлекаю явные условия из описания...");
         var conditions = await ExtractConditionsAsync(workItem);
 
-        Console.WriteLine("Generating base QA checklist...");
+        Console.WriteLine("Генерирую базовый QA чек-лист...");
         var body = await GenerateChecklistAsync(workItem, conditions);
         var finalMarkdown =
         $"""
@@ -39,10 +69,14 @@ public sealed class QaChecklistWorkflow
         {body}
         """;
 
-        Console.WriteLine("Preparing code context regression checks...");
+        Console.WriteLine("Готовлю регрессионные проверки по code context...");
         var codeContext = BuildCodeContextSummary(workItem);
         finalMarkdown = await AddCodeContextRegressionAsync(finalMarkdown, codeContext);
-        return finalMarkdown;
+
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
+        await File.WriteAllTextAsync(outputPath, finalMarkdown);
+
+        return new QaChecklistWorkflowResult(finalMarkdown, Path.GetFullPath(outputPath));
     }
 
     private async Task<string> ExtractConditionsAsync(WorkItemContext workItem)
@@ -232,4 +266,5 @@ public sealed class QaChecklistWorkflow
 
         return checklist + "\n\n## Code Context Regression\n" + items;
     }
+
 }
