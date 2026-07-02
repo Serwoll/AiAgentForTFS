@@ -8,13 +8,13 @@ public sealed class QaChecklistWorkflow
 {
     private const int MaxChangedFilesInToolResult = 15;
     private readonly TfsWorkItemClient _workItemClient;
-    private readonly OllamaChatClient _ollamaChatClient;
+    private readonly IChatClient _chatClient;
     private readonly ConfluenceClient _confluenceClient;
 
-    public QaChecklistWorkflow(TfsWorkItemClient workItemClient, OllamaChatClient ollamaChatClient, ConfluenceClient confluenceClient)
+    public QaChecklistWorkflow(TfsWorkItemClient workItemClient, IChatClient chatClient, ConfluenceClient confluenceClient)
     {
         _workItemClient = workItemClient;
-        _ollamaChatClient = ollamaChatClient;
+        _chatClient = chatClient;
         _confluenceClient = confluenceClient;
     }
 
@@ -81,7 +81,7 @@ public sealed class QaChecklistWorkflow
 
     private async Task<string> ExtractConditionsAsync(WorkItemContext workItem)
     {
-        AIAgent agent = _ollamaChatClient.AsAIAgent(instructions: "You extract explicit requirements from User Stories. Return only facts from the provided text.");
+        AIAgent agent = _chatClient.AsAIAgent(instructions: "You extract explicit requirements from User Stories. Return only facts from the provided text.");
         var confluenceContext = BuildConfluenceContextSummary(workItem);
         var response = await agent.RunAsync($"""
         Извлеки только явные условия из User Story.
@@ -108,7 +108,7 @@ public sealed class QaChecklistWorkflow
 
     private async Task<string> GenerateChecklistAsync(WorkItemContext workItem, string conditions)
     {
-        AIAgent agent = _ollamaChatClient.AsAIAgent(instructions: """
+        AIAgent agent = _chatClient.AsAIAgent(instructions: """
         - Every extracted condition must be covered by at least one checklist item.
         - Do not move extracted conditions to Open Questions unless the condition itself is ambiguous.
         - Do not create automatic state transition checks unless the User Story explicitly says the application must switch automatically.
@@ -239,7 +239,7 @@ public sealed class QaChecklistWorkflow
         if (codeContextSummary == "No code context found")
             return checklist;
 
-        AIAgent agent = _ollamaChatClient.AsAIAgent(instructions: """
+        AIAgent agent = _chatClient.AsAIAgent(instructions: """
         You generate only additional manual QA regression checklist items from code context.
         Do not rewrite or summarize the existing checklist.
         Do not return file paths, class names, method names, service names, PR names, or commit names as checklist items.

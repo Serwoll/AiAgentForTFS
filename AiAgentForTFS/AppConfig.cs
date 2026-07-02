@@ -8,10 +8,16 @@ public sealed record AppConfig(
     string AzureDevOpsApiVersion,
     Uri OllamaUrl,
     string OllamaModel,
+    string LlmProvider,
     Uri? ConfluenceBaseUrl,
     string? ConfluenceUsername,
     string? ConfluenceToken,
-    string ConfluenceAuthMode)
+    string ConfluenceAuthMode,
+    string? GigaChatAuthKey,
+    string GigaChatModel,
+    string GigaChatScope,
+    Uri GigaChatAuthUrl,
+    Uri GigaChatApiUrl)
 {
     public static AppConfig FromEnvironment()
     {
@@ -30,6 +36,9 @@ public sealed record AppConfig(
         var ollamaModel = Environment.GetEnvironmentVariable("OLLAMA_MODEL")
             ?? settings.Ollama?.Model
             ?? "qwen3:8b";
+        var llmProvider = Environment.GetEnvironmentVariable("LLM_PROVIDER")
+            ?? settings.Llm?.Provider
+            ?? "Ollama";
         var confluenceBaseUrlText = Environment.GetEnvironmentVariable("CONFLUENCE_BASE_URL")
             ?? settings.Confluence?.BaseUrl;
         var confluenceUsername = Environment.GetEnvironmentVariable("CONFLUENCE_USERNAME")
@@ -39,6 +48,20 @@ public sealed record AppConfig(
         var confluenceAuthMode = Environment.GetEnvironmentVariable("CONFLUENCE_AUTH_MODE")
             ?? settings.Confluence?.AuthMode
             ?? "Bearer";
+        var gigaChatAuthKey = Environment.GetEnvironmentVariable("GIGACHAT_AUTH_KEY")
+            ?? settings.GigaChat?.AuthKey;
+        var gigaChatModel = Environment.GetEnvironmentVariable("GIGACHAT_MODEL")
+            ?? settings.GigaChat?.Model
+            ?? "GigaChat";
+        var gigaChatScope = Environment.GetEnvironmentVariable("GIGACHAT_SCOPE")
+            ?? settings.GigaChat?.Scope
+            ?? "GIGACHAT_API_PERS";
+        var gigaChatAuthUrlText = Environment.GetEnvironmentVariable("GIGACHAT_AUTH_URL")
+            ?? settings.GigaChat?.AuthUrl
+            ?? "https://ngw.devices.sberbank.ru:9443/api/v2/oauth";
+        var gigaChatApiUrlText = Environment.GetEnvironmentVariable("GIGACHAT_API_URL")
+            ?? settings.GigaChat?.ApiUrl
+            ?? "https://gigachat.devices.sberbank.ru/api/v1/chat/completions";
 
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
@@ -61,10 +84,21 @@ public sealed record AppConfig(
         }
 
         Uri? confluenceBaseUrl = null;
+
         if (!string.IsNullOrWhiteSpace(confluenceBaseUrlText)
             && !Uri.TryCreate(confluenceBaseUrlText.TrimEnd('/'), UriKind.Absolute, out confluenceBaseUrl))
         {
             throw new ConfigurationException("Confluence:BaseUrl должен быть абсолютным URL.");
+        }
+
+        if (!Uri.TryCreate(gigaChatAuthUrlText.TrimEnd('/'), UriKind.Absolute, out var gigaChatAuthUrl))
+        {
+            throw new ConfigurationException("GigaChat:AuthUrl должен быть абсолютным URL.");
+        }
+
+        if (!Uri.TryCreate(gigaChatApiUrlText.TrimEnd('/'), UriKind.Absolute, out var gigaChatApiUrl))
+        {
+            throw new ConfigurationException("GigaChat:ApiUrl должен быть абсолютным URL.");
         }
 
         return new AppConfig(
@@ -73,10 +107,16 @@ public sealed record AppConfig(
             apiVersion,
             ollamaUrl,
             ollamaModel,
+            llmProvider,
             confluenceBaseUrl,
             string.IsNullOrWhiteSpace(confluenceUsername) ? null : confluenceUsername,
             string.IsNullOrWhiteSpace(confluenceToken) ? null : confluenceToken,
-            confluenceAuthMode);
+            confluenceAuthMode,
+            string.IsNullOrWhiteSpace(gigaChatAuthKey) ? null : gigaChatAuthKey,
+            gigaChatModel,
+            gigaChatScope,
+            gigaChatAuthUrl,
+            gigaChatApiUrl);
     }
 
     private static string? GetOptional(string primaryName, string fallbackName)
@@ -90,7 +130,9 @@ public sealed record AppConfig(
     private sealed record AppSettings(
         AzureDevOpsSettings? AzureDevOps,
         OllamaSettings? Ollama,
-        ConfluenceSettings? Confluence)
+        ConfluenceSettings? Confluence,
+        LlmSettings? Llm,
+        GigaChatSettings? GigaChat)
     {
         public static AppSettings Load()
         {
@@ -98,12 +140,12 @@ public sealed record AppConfig(
 
             if (path is null)
             {
-                return new AppSettings(null, null, null);
+                return new AppSettings(null, null, null, null, null);
             }
 
             var json = File.ReadAllText(path);
             return JsonSerializer.Deserialize<AppSettings>(json, JsonOptions.Default)
-                ?? new AppSettings(null, null, null);
+                ?? new AppSettings(null, null, null, null, null);
         }
 
         private static string? FindSettingsFile()
@@ -132,4 +174,14 @@ public sealed record AppConfig(
         string? Username,
         string? Token,
         string? AuthMode);
+
+    private sealed record LlmSettings(
+        string? Provider);
+
+    private sealed record GigaChatSettings(
+        string? AuthKey,
+        string? Model,
+        string? Scope,
+        string? AuthUrl,
+        string? ApiUrl);
 }

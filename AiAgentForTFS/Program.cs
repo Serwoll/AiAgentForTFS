@@ -65,7 +65,7 @@ static async Task<int> RunGenerateQaChecklistAsync(string[] args)
     var gitClient = new AzureDevOpsGitClient(httpClient, config);
     var confluenceClient = new ConfluenceClient(httpClient, config);
     var tfsClient = new TfsWorkItemClient(httpClient, config, gitClient, confluenceClient);
-    var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
+    var chatClient = CreateChatClient(config, httpClient);
     var workflow = new QaChecklistWorkflow(tfsClient, chatClient, confluenceClient);
 
     Console.WriteLine($"Запускаю генерацию QA чек-листа для User Story {workItemId}...");
@@ -99,7 +99,7 @@ static async Task<int> RunGenerateQaChecklistFromConfluenceAsync(string[] args)
     var gitClient = new AzureDevOpsGitClient(httpClient, config);
     var confluenceClient = new ConfluenceClient(httpClient, config);
     var tfsClient = new TfsWorkItemClient(httpClient, config, gitClient, confluenceClient);
-    var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
+    var chatClient = CreateChatClient(config, httpClient);
     var workflow = new QaChecklistWorkflow(tfsClient, chatClient, confluenceClient);
 
     Console.WriteLine("Запускаю генерацию QA чек-листа по странице Confluence...");
@@ -145,7 +145,9 @@ static async Task<int> RunChatAsync()
 
 static async Task<int> GenerateAndSaveAsync(WorkItemContext workItem, AppConfig config)
 {
-    var chatClient = new OllamaChatClient(config.OllamaUrl, config.OllamaModel);
+    using var httpClient = CreateHttpClient();
+
+    var chatClient = CreateChatClient(config, httpClient);
     AIAgent agent = chatClient.AsAIAgent(
         instructions: "You are a senior QA engineer. Return practical Markdown only.");
 
@@ -249,6 +251,16 @@ static HttpClient CreateHttpClient()
     {
         Timeout = TimeSpan.FromMinutes(2)
     };
+}
+
+static IChatClient CreateChatClient(AppConfig appConfig, HttpClient httpClient)
+{
+    if (appConfig.LlmProvider.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
+        return new OllamaChatClient(appConfig.OllamaUrl, appConfig.OllamaModel);
+    if (appConfig.LlmProvider.Equals("GigaChat", StringComparison.OrdinalIgnoreCase))
+        return new GigaChatClient(httpClient, appConfig);
+
+    throw new ConfigurationException($"Неизвестный LLM provider: {appConfig.LlmProvider}");
 }
 
 static bool LooksLikeCodeContext(string value)
