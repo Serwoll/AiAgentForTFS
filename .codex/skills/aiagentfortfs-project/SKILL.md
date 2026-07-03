@@ -13,16 +13,18 @@ Current product goal:
 
 - Generate QA checklists from Azure DevOps/TFS User Stories.
 - Enrich checklist context with linked Pull Request metadata, commit messages, and changed file paths.
-- Use local Ollama via Microsoft Agent Framework.
+- Support multiple LLM providers through `Microsoft.Extensions.AI.IChatClient`.
+- Use local Ollama as the original provider and add GigaChat through a custom `GigaChatClient`.
 - Evolve from C# prompt orchestration to a real Agent Framework design with sessions and tools.
 
 ## Teaching Mode
 
 - The user is learning C# and wants ownership of the code.
 - Do not write code unless explicitly asked.
+- The user explicitly disliked receiving nearly line-by-line code hints. Prefer explaining types, flow, compiler errors, and next small steps; provide concrete code only when asked or when making an approved edit.
 - When teaching, reference exact file/line links where useful.
 - Prefer questions that diagnose understanding before explaining.
-- Track known weak spots: generics, LINQ, regex, primary constructors, Agent Framework tools/sessions.
+- Track known weak spots: generics, LINQ, regex, primary constructors, Agent Framework tools/sessions, HTTP request/response DTOs, JSON mapping, `IEnumerable<T>`/collections, and async provider adapters.
 - Keep `LEARNING_PLAN.md` updated when milestones, gaps, or direction change.
 
 ## Current Architecture
@@ -35,12 +37,26 @@ Main files:
 - `TfsWorkItemClient.cs`: Azure DevOps/TFS Work Item REST client.
 - `AzureDevOpsGitClient.cs`: PR artifact parsing and PR/commit/changed-file enrichment.
 - `ChecklistPromptBuilder.cs`: prompt construction and compact result audit.
+- `QaChecklistWorkflow.cs`: deterministic checklist workflow that calls an `IChatClient`.
+- `GigaChatClient.cs`: custom `IChatClient` adapter for GigaChat REST API.
 - `LEARNING_PLAN.md`: living learning/development roadmap.
 
 Important distinction:
 
 - Current MVP: C# orchestration gathers context, builds prompt, calls `AIAgent.RunAsync`.
 - Target design: Agent Framework agent receives tools and decides when to call them.
+
+Current GigaChat checkpoint as of 2026-07-03:
+
+- `QaChecklistWorkflow` is provider-agnostic through `IChatClient`.
+- `Program.cs` has `CreateChatClient(...)` and can choose Ollama or GigaChat via config.
+- `AppConfig` has `Llm.Provider` and GigaChat settings.
+- `GigaChatClient` implements `IChatClient`.
+- OAuth/token flow is implemented with `Basic` auth key, `RqUID`, `scope`, JSON parsing, and cached access token.
+- GigaChat TLS required installing trusted certificates on the work machine.
+- `/chat/completions` DTOs and `ChatMessage` -> `GigaChatMessage` mapping are in progress/mostly implemented.
+- Next expected step: run real generation with `Llm.Provider = "GigaChat"` and debug runtime API response if needed.
+- Do not print access tokens or secrets; use safe diagnostic messages.
 
 ## Microsoft Agent Framework Focus
 

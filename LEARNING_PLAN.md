@@ -31,6 +31,13 @@
 - `appsettings.json`, env vars, `??`, `?.`.
 - базовый смысл HTTP-клиентов, PAT auth, JSON deserialize.
 - общий смысл PR enrichment: найти PR link, загрузить PR metadata/commits/changed files, добавить в prompt.
+- `IChatClient` как адаптер между Microsoft Agent Framework и конкретным LLM-провайдером.
+- Разница между `Task<T>` и `IAsyncEnumerable<T>`: один асинхронный результат против потоковой выдачи.
+- OAuth flow GigaChat: сначала получить `access_token`, потом использовать `Authorization: Bearer`.
+- `JsonPropertyName` для positional record через `[property: ...]`.
+- `DateTimeOffset.UtcNow` и `FromUnixTimeMilliseconds(...)` для кэша access token.
+- `FormUrlEncodedContent` для OAuth body и `StringContent` с `application/json` для chat body.
+- Маппинг `ChatMessage`/`ChatRole` из `Microsoft.Extensions.AI` в DTO GigaChat.
 
 Пока требуют практики:
 
@@ -40,6 +47,44 @@
 - primary constructor и классический constructor с `_fields`.
 - граница между DTO, domain model, service и orchestration.
 - Microsoft Agent Framework concepts: agents, sessions, tools, middleware, workflows.
+- LINQ-преобразования коллекций, особенно `IEnumerable<ChatMessage>` -> `List<GigaChatMessage>`.
+- Отличие C# object/DTO от HTTP body (`HttpContent`).
+- Работа с API response collections: `choices` как список, выбор первого элемента и проверка пустого ответа.
+- Аккуратная диагностика HTTP ошибок без утечки токенов/секретов в console output.
+
+## Текущий технический checkpoint на 2026-07-03
+
+Идет интеграция GigaChat как альтернативного LLM-провайдера вместо Ollama.
+
+Сделано:
+
+- `QaChecklistWorkflow` зависит от `IChatClient`, а не от конкретного Ollama-клиента.
+- `Program.cs` выбирает провайдера через `CreateChatClient(...)`.
+- `AppConfig` содержит настройки `Llm.Provider` и секцию `GigaChat`.
+- Создан `GigaChatClient : IChatClient`.
+- Реализован OAuth-запрос к GigaChat:
+  - `Authorization: Basic <GigaChatAuthKey>`;
+  - header `RqUID`;
+  - form body `scope`;
+  - парсинг `access_token` и `expires_at`;
+  - кэш токена с запасом в 1 минуту.
+- Сертификаты для GigaChat на рабочей машине пришлось установить отдельно; без доверенного сертификата .NET падал на SSL.
+- Реализованы DTO для `/chat/completions` и маппинг сообщений:
+  - `ChatRole.User` -> `user`;
+  - `ChatRole.Assistant` -> `assistant`;
+  - `ChatRole.System` -> `system`.
+- Последний проверенный `dotnet build` после реализации chat request был зеленым.
+
+Следующий шаг:
+
+- Запустить реальную генерацию через `Llm.Provider = "GigaChat"`.
+- Если GigaChat вернет runtime-ошибку, смотреть HTTP status и body через `TrimError(body)`.
+- После успешного ответа убрать лишние `using` в `GigaChatClient.cs` (`System.Text.Unicode`, `OpenAI.Assistants`, если они остались).
+- Дальше причесать `GigaChatClient`: сообщения ошибок, маленькие helper methods, отсутствие утечки токена в вывод.
+
+Важное учебное правило:
+
+- Ученик хочет писать код сам. Codex должен объяснять направление и проверять ошибки, но не выдавать готовые методы построчно, если пользователь прямо не попросил.
 
 ## Этап 1. Закрепить владение текущим MVP
 

@@ -81,15 +81,23 @@ public sealed class QaChecklistWorkflow
 
     private async Task<string> ExtractConditionsAsync(WorkItemContext workItem)
     {
-        AIAgent agent = _chatClient.AsAIAgent(instructions: "You extract explicit requirements from User Stories. Return only facts from the provided text.");
+        AIAgent agent = _chatClient.AsAIAgent(instructions: """
+        You extract requirements for a QA checklist.
+        Use only explicit facts from the provided User Story and Confluence context.
+        Do not infer product behavior from implementation details.
+        Return Russian Markdown only.
+        """);
         var confluenceContext = BuildConfluenceContextSummary(workItem);
         var response = await agent.RunAsync($"""
         Извлеки только явные условия из User Story.
         Условие должно быть явно написано в Title, Description, Acceptance Criteria или Confluence Context.
         Формат каждого пункта: "- триггер/настройка/состояние -> ожидаемое поведение".
+        Если встречаются роли, права, настройки, режимы, состояния, ошибки, ограничения или исключения - выдели их отдельными пунктами.
         Не добавляй предположения.
         Не используй code context.
-        Верни только Markdown-список.
+        Не добавляй технические детали, если они не описаны как поведение продукта.
+        Если явных условий нет, верни ровно: "- Явных условий не найдено."
+        Верни только Markdown-список без заголовков и пояснений.
 
         Title:
         {workItem.Title}
@@ -109,9 +117,15 @@ public sealed class QaChecklistWorkflow
     private async Task<string> GenerateChecklistAsync(WorkItemContext workItem, string conditions)
     {
         AIAgent agent = _chatClient.AsAIAgent(instructions: """
+        You are a senior manual QA engineer.
+        Return Russian Markdown only.
         - Every extracted condition must be covered by at least one checklist item.
         - Do not move extracted conditions to Open Questions unless the condition itself is ambiguous.
         - Do not create automatic state transition checks unless the User Story explicitly says the application must switch automatically.
+        - Each checklist item must describe a concrete user action or observable system state and the expected result.
+        - Do not create generic regression items such as "check previous versions" or "check all existing functionality".
+        - Avoid duplicate checks between Checklist and Regression.
+        - Do not mention code, commits, files, classes, methods, services, or PR metadata.
         - If there are no open questions, write "- Нет открытых вопросов."
         """);
         var response = await agent.RunAsync($"""
@@ -120,6 +134,9 @@ public sealed class QaChecklistWorkflow
         Каждое extracted condition должно быть покрыто минимум одним checklist item.
         Если extracted condition говорит о сборке/пайплайне, добавь QA-проверку доступности результата в установленной сборке, а не вопрос.
         Не добавляй проверки на основе предположений.
+        Не добавляй пункты, которые нельзя проверить вручную через UI, API, логи, конфигурацию или наблюдаемое состояние системы.
+        Не дублируй один и тот же смысл в разных разделах.
+        Формулируй пункты как проверяемое действие с ожидаемым результатом.
         Верни только Markdown.
 
         User Story:
@@ -137,13 +154,19 @@ public sealed class QaChecklistWorkflow
         Структура чек-листа
 
         ## Checklist
-        - [ ] ...
+        ### <функциональная область>
+        - [ ] Проверить, что <действие/состояние> приводит к <ожидаемый результат>.
 
         ## Regression
-        - [ ] ...
+        - [ ] Проверить, что <смежное существующее поведение> остается корректным после изменения.
 
         ## Open Questions
         - ...
+
+        Правила для разделов:
+        - Checklist: только прямые проверки из Extracted Conditions.
+        - Regression: только конкретные смежные риски, которые логически следуют из User Story. Если таких рисков нет, напиши "- Нет явных регрессионных рисков."
+        - Open Questions: только реальные неоднозначности или отсутствующие данные, которые мешают тестированию. Если вопросов нет, напиши "- Нет открытых вопросов."
         """);
         return response.ToString();
     }
@@ -241,11 +264,14 @@ public sealed class QaChecklistWorkflow
 
         AIAgent agent = _chatClient.AsAIAgent(instructions: """
         You generate only additional manual QA regression checklist items from code context.
+        Return Russian Markdown only.
         Do not rewrite or summarize the existing checklist.
         Do not return file paths, class names, method names, service names, PR names, or commit names as checklist items.
         Convert code context into user-visible or QA-verifiable product behavior.
         If there are no useful regression items, return only "NONE".
-        Each item must start with "[code-context]".
+        Return a plain Markdown checklist only. Do not return headings.
+        Each item must use this exact format: "- [ ] [code-context] Проверить, что ..."
+        Avoid duplicates with the existing checklist.
         Never output raw code context entries.
         """);
 
@@ -258,6 +284,9 @@ public sealed class QaChecklistWorkflow
 
         Return only additional regression checklist items.
         Do not return the full checklist.
+        Do not add broad or speculative scenarios.
+        Add an item only when code context suggests a concrete user-visible behavior, QA-observable state, configuration, integration, or error-handling risk.
+        If the code context only lists files without enough behavioral signal, return only "NONE".
         """);
 
         var items = response.ToString().Trim();
