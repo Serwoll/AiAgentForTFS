@@ -48,7 +48,8 @@ public sealed class GigaChatClient : IChatClient
     private async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default(CancellationToken))
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, _config.GigaChatAuthUrl);
-        request.Headers.Authorization = CreatePatHeader(_authKey);
+        request.Headers.Authorization = CreateAuthHeader(_authKey);
+        request.Headers.Add("RqUID", Guid.NewGuid().ToString());
 
         var content = new KeyValuePair<string, string>("scope", _config.GigaChatScope);
         request.Content = new FormUrlEncodedContent([content]);
@@ -69,10 +70,9 @@ public sealed class GigaChatClient : IChatClient
 
 
     }
-    private static AuthenticationHeaderValue CreatePatHeader(string pat)
+    private static AuthenticationHeaderValue CreateAuthHeader(string authKey)
     {
-        var token = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{pat}"));
-        return new AuthenticationHeaderValue("Basic", token);
+        return new AuthenticationHeaderValue("Basic", authKey);
     }
     private static string TrimError(string body)
     {
