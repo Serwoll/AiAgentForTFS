@@ -126,7 +126,10 @@ public sealed class QaChecklistWorkflow
         - Do not create generic regression items such as "check previous versions" or "check all existing functionality".
         - Avoid duplicate checks between Checklist and Regression.
         - Do not mention code, commits, files, classes, methods, services, or PR metadata.
-        - If there are no open questions, write "- Нет открытых вопросов."
+        - If there are no concrete regression risks, write exactly "- Нет явных регрессионных рисков."
+        - If there are no open questions, write exactly "- Нет открытых вопросов."
+        - Never output both a real item and a "Нет ..." line in the same section.
+        - Do not use bold text for "Нет ..." lines.
         """);
         var response = await agent.RunAsync($"""
         Сгенерируй QA чек-лист на основе User Story и Extracted Conditions.
@@ -158,15 +161,16 @@ public sealed class QaChecklistWorkflow
         - [ ] Проверить, что <действие/состояние> приводит к <ожидаемый результат>.
 
         ## Regression
-        - [ ] Проверить, что <смежное существующее поведение> остается корректным после изменения.
+        - [ ] Проверить, что <конкретное смежное существующее поведение> остается корректным после изменения.
 
         ## Open Questions
         - ...
 
         Правила для разделов:
         - Checklist: только прямые проверки из Extracted Conditions.
-        - Regression: только конкретные смежные риски, которые логически следуют из User Story. Если таких рисков нет, напиши "- Нет явных регрессионных рисков."
-        - Open Questions: только реальные неоднозначности или отсутствующие данные, которые мешают тестированию. Если вопросов нет, напиши "- Нет открытых вопросов."
+        - Regression: только конкретные смежные риски, которые логически следуют из User Story. Не добавляй общий пункт "проверить смежные области". Если конкретных рисков нет, весь раздел должен состоять из одной строки: "- Нет явных регрессионных рисков."
+        - Open Questions: только реальные неоднозначности или отсутствующие данные, которые мешают тестированию. Если вопросов нет, весь раздел должен состоять из одной строки: "- Нет открытых вопросов."
+        - Строки "Нет явных регрессионных рисков." и "Нет открытых вопросов." нельзя оформлять как checkbox, нельзя выделять жирным и нельзя оборачивать в дополнительные скобки.
         """);
         return response.ToString();
     }
@@ -290,10 +294,21 @@ public sealed class QaChecklistWorkflow
         """);
 
         var items = response.ToString().Trim();
-        if (items == "NONE")
+        if (IsNoneResponse(items))
             return checklist;
 
         return checklist + "\n\n## Code Context Regression\n" + items;
     }
 
+    private static bool IsNoneResponse(string value)
+    {
+        var normalized = value.Trim().Trim('*', '_', '`').Trim();
+
+        if (normalized.StartsWith("-", StringComparison.Ordinal))
+        {
+            normalized = normalized[1..].Trim().Trim('*', '_', '`').Trim();
+        }
+
+        return normalized.Equals("NONE", StringComparison.OrdinalIgnoreCase);
+    }
 }
