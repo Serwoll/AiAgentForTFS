@@ -493,5 +493,7 @@ $RECYCLE.BIN/
 ChatAiTelegramBot-master/
 Modelfile
 output/
+
+# Local AI agent files.
 .codex/
 .agents/
